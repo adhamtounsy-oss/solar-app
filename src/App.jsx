@@ -1619,8 +1619,10 @@ export default function App() {
       {l:"25yr net gain/villa", v:fmtE(r.netGain),                                  c:C.green }, 
       {l:`NPV @${inp.discountRate||12}% discount`, v:fmtE(r.npvAtRate),             c:r.npvAtRate>=0?C.green:C.red}, 
       {l:"LCOE",                v:`E£${r.lcoe}/kWh`,                                c:C.yellow}, 
-      {l:"Performance Ratio",   v:r.perfRatio||"—",                                 c:C.accent}, 
-      {l:"Clipping loss",       v:`${(r.clippingPct||0).toFixed(1)}%`,             c:(r.clippingPct||0)>3?C.orange:C.green}, 
+      {l:"Specific yield (P50)", v:`${(r.annGenTMY/r.actKwp).toFixed(0)} kWh/kWp`, c:C.accent},
+      {l:"Specific yield (P90)", v:`${(r.annGenP90/r.actKwp).toFixed(0)} kWh/kWp`, c:C.yellow},
+      {l:"Performance Ratio",   v:r.perfRatio||"—",                                 c:C.accent},
+      {l:"Clipping loss",       v:`${(r.clippingPct||0).toFixed(1)}%`,             c:(r.clippingPct||0)>3?C.orange:C.green},
     ]; 
     const checks=[ 
       {l:"Inverter sizing",   v:r.chkInvSize},{l:"DC/AC ratio",    v:r.chkDcAc   }, 
@@ -4094,8 +4096,9 @@ for</div>
         <div style={{background:"#0d1526",borderBottom:`1px solid ${C.border}`,
           display:"flex",flexWrap:"wrap",alignItems:"stretch"}}>
           {[
-            {label:"System",   value:`${r.actKwp.toFixed(1)} kWp`,                   color:C.yellow },
-            {label:"P50 Yield",value:`${(r.annGenTMY/1000).toFixed(1)} MWh/yr`,       color:C.green  },
+            {label:"System",       value:`${r.actKwp.toFixed(1)} kWp`,                   color:C.yellow },
+            {label:"P50 Yield",    value:`${(r.annGenTMY/1000).toFixed(1)} MWh/yr`,   color:C.green  },
+            {label:"Specific Yield",value:`${(r.annGenTMY/r.actKwp).toFixed(0)} kWh/kWp`, color:C.accent},
             {label:"Offset",   value:`${(r.coverageActual||0).toFixed(0)}%`,           color:"#22d3ee"},
             {label:"Payback",  value:r.pb?`${r.pb} yr`:">25 yr",                      color:C.orange },
             {label:"IRR",      value:`${r.irr}%`,                                      color:"#a78bfa"},
