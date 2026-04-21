@@ -2826,17 +2826,7 @@ for
               {m.l} 
             </button> 
           ))} 
-          <span style={{fontSize:11,color:C.muted,marginLeft:8}}>Yield basis:</span> 
-          {[{v:"p50",l:"P50"},{v:"p90",l:"P90"}].map(m=>( 
-            <button key={m.v} onClick={()=>upd("yieldMode",m.v)} 
-              style={{padding:"5px 12px",borderRadius:20,border:"none",cursor:"pointer", 
-              fontSize:11,fontWeight:700, 
-              background:inp.yieldMode===m.v?C.yellow:C.card, 
-              color:inp.yieldMode===m.v?C.bg:C.muted}}> 
-              {m.l} 
-            </button> 
-          ))} 
-        </div> 
+        </div>
         {inp.tariffMode==="tiered" && ( 
           <div style={{padding:"8px 14px",background:"#14b8a618",borderRadius:8,marginBottom:10, 
             fontSize:11,color:"#14b8a6",borderLeft:"3px solid #14b8a6"}}> 
@@ -4095,15 +4085,32 @@ for</div>
       {r && (
         <div style={{background:"#0d1526",borderBottom:`1px solid ${C.border}`,
           display:"flex",flexWrap:"wrap",alignItems:"stretch"}}>
-          {[
-            {label:"System",       value:`${r.actKwp.toFixed(1)} kWp`,                   color:C.yellow },
-            {label:"P50 Yield",    value:`${(r.annGenTMY/1000).toFixed(1)} MWh/yr`,   color:C.green  },
-            {label:"Specific Yield",value:`${(r.annGenTMY/r.actKwp).toFixed(0)} kWh/kWp`, color:C.accent},
-            {label:"Offset",   value:`${(r.coverageActual||0).toFixed(0)}%`,           color:"#22d3ee"},
-            {label:"Payback",  value:r.pb?`${r.pb} yr`:">25 yr",                      color:C.orange },
-            {label:"IRR",      value:`${r.irr}%`,                                      color:"#a78bfa"},
-            {label:"Status",   value:r.allOk?"✓ Compatible":"⚠ Check design",         color:r.allOk?C.green:C.red},
-          ].map(({label,value,color},i)=>(
+          {/* P50/P90 toggle */}
+          <div style={{padding:"6px 14px",borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column",gap:4,justifyContent:"center"}}>
+            <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1}}>Yield basis</div>
+            <div style={{display:"flex",gap:4}}>
+              {[{v:"p50",l:"P50"},{v:"p90",l:"P90"}].map(m=>(
+                <button key={m.v} onClick={()=>upd("yieldMode",m.v)}
+                  style={{padding:"3px 10px",borderRadius:20,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,
+                  background:inp.yieldMode===m.v?C.yellow:C.card,
+                  color:inp.yieldMode===m.v?C.bg:C.muted}}>
+                  {m.l}
+                </button>
+              ))}
+            </div>
+          </div>
+          {(()=>{
+            const yGen = inp.yieldMode==="p90" ? r.annGenP90 : r.annGenTMY;
+            return [
+              {label:"System",        value:`${r.actKwp.toFixed(1)} kWp`,                     color:C.yellow },
+              {label:`${inp.yieldMode==="p90"?"P90":"P50"} Yield`, value:`${(yGen/1000).toFixed(1)} MWh/yr`, color:inp.yieldMode==="p90"?C.yellow:C.green},
+              {label:"Specific Yield", value:`${(yGen/r.actKwp).toFixed(0)} kWh/kWp`,         color:C.accent },
+              {label:"Offset",         value:`${(r.coverageActual||0).toFixed(0)}%`,           color:"#22d3ee"},
+              {label:"Payback",        value:r.pb?`${r.pb} yr`:">25 yr",                      color:C.orange },
+              {label:"IRR",            value:`${r.irr}%`,                                      color:"#a78bfa"},
+              {label:"Status",         value:r.allOk?"✓ Compatible":"⚠ Check design",         color:r.allOk?C.green:C.red},
+            ];
+          })().map(({label,value,color},i)=>(
             <div key={i} style={{padding:"6px 18px",borderRight:`1px solid ${C.border}`,
               display:"flex",flexDirection:"column",gap:2,minWidth:90}}>
               <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1}}>{label}</div>
