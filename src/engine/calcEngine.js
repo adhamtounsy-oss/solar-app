@@ -15,7 +15,8 @@ export function bilinearDeg(yearsElapsed, annualRate) {
 }
 
 export function calcEngine(inp, panel, inverter, battery, hourlyData) {
-  if (!panel || !inverter || !battery) return null;
+  if (!panel || !inverter) return null;
+  const noBat = !battery || battery.kwh === 0;
 
   // -- Unified load analysis — single source of truth ----------
   // kW ratings (independent of method)
@@ -305,15 +306,12 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
 
   // eveTarget: cover (batEveningCovPct%) of evening deficit from 24h demand profile
   // critE: scale eveTarget for backup windows longer than the default 6h evening window
-  const eveTarget  = eveningDeficit * (inp.batEveningCovPct/100);
-  const critE      = eveTarget * (inp.backupHours / 6);
-  const designE    = Math.max(eveTarget, critE);
-  // Usable discharge capacity = nominal × DoD (IEC 62619 / Linden "Handbook of
-// Batteries")
-  // Round-trip η is accounted for in dispatch simulation, not in sizing formula.
-  const usableBat  = battery.kwh * (battery.dod/100);
-  const autonomy   = usableBat / Math.max(eveningDeficit / 6, 0.1); // hrs: usable capacity ÷ avg evening load (kW)
-  const batRulePct = (battery.kwh/(actKwp*0.2*inp.backupHours))*100;
+  const eveTarget  = noBat ? 0 : eveningDeficit * (inp.batEveningCovPct/100);
+  const critE      = noBat ? 0 : eveTarget * (inp.backupHours / 6);
+  const designE    = noBat ? 0 : Math.max(eveTarget, critE);
+  const usableBat  = noBat ? 0 : battery.kwh * (battery.dod/100);
+  const autonomy   = noBat ? 0 : usableBat / Math.max(eveningDeficit / 6, 0.1);
+  const batRulePct = noBat ? 0 : (battery.kwh/(actKwp*0.2*inp.backupHours))*100;
 
   // --- Compatibility checks ---
   // A1: Inverter must cover peak simultaneous demand from 24h profile (not solarKW)
@@ -332,11 +330,12 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
   // Fix 5: use inverter.numMppt (from library); worst MPPT carries ceil(nStr/numMppt) strings
   const strPerMppt = Math.ceil(nStr / Math.max(1, inverter.numMppt||1));
   const chkIscMppt = (panel.isc * strPerMppt) <= inverter.iscPerMppt ? "PASS":"FAIL";
-  const chkBatVolt = battery.voltage>=(inverter.batVoltMin||0) &&
-                     battery.voltage<=(inverter.batVoltMax||9999) ? "PASS":"INCOMPATIBLE";
-  const chkBatChg  = inverter.batChargeKW>=(battery.kwh*battery.dod/100/inp.backupHours) ? "PASS":"REVIEW";
-  const chkBatRule = battery.kwh<=actKwp*0.2*inp.backupHours ? "PASS":"EXCEEDS LIMIT";
-  const allOk = [chkInvSize,chkDcAc,chkMpptMin,chkMpptMax,chkIscMppt,chkBatVolt,chkBatChg,chkBatRule].every(c=>c==="PASS");
+  const chkBatVolt = noBat ? "N/A" : (battery.voltage>=(inverter.batVoltMin||0) &&
+                     battery.voltage<=(inverter.batVoltMax||9999) ? "PASS":"INCOMPATIBLE");
+  const chkBatChg  = noBat ? "N/A" : (inverter.batChargeKW>=(battery.kwh*battery.dod/100/inp.backupHours) ? "PASS":"REVIEW");
+  const chkBatRule = noBat ? "N/A" : (battery.kwh<=actKwp*0.2*inp.backupHours ? "PASS":"EXCEEDS LIMIT");
+  const allOk = [chkInvSize,chkDcAc,chkMpptMin,chkMpptMax,chkIscMppt,
+    ...(noBat ? [] : [chkBatVolt,chkBatChg,chkBatRule])].every(c=>c==="PASS");
 
   // --- Wiring ---
   // E6: Temperature-corrected copper resistivity (IEC 60228 / IEC 60364-5-52)
@@ -375,8 +374,7 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
   const iFdrD   = iFdr / 0.87;
   const csaFdr  = minCSA(iFdr, inp.lenFeederM, strVmp, 1.5);
   const vdFdr   = ((2*inp.lenFeederM*(panel.imp*nStr)*rhoDC)/(csaFdr*strVmp))*100;
-  // Battery cable
-  const iBat    = (battery.kwh*1000)/battery.voltage/inp.backupHours*1.25;
+  const iBat    = noBat ? 0 : (battery.kwh*1000)/battery.voltage/inp.backupHours*1.25;
   // AC cable
   const iAC     = (inverter.acKW*1000)/(inp.supplyPhase==="three"
                     ? inp.supplyVoltageLL*1.732*0.95
@@ -391,7 +389,7 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
   // --- Costs ---
   const arrayCostEGP = totP * panel.costUSD * panel.wp * inp.usdRate;
   const invCostEGP   = inverter.costEGP;
-  const batCostEGP   = battery.costEGP;
+  const batCostEGP   = noBat ? 0 : battery.costEGP;
   const bos          = actKwp*8000;
   const engCost      = actKwp*5000;
   const sysC         = arrayCostEGP+invCostEGP+batCostEGP+bos+engCost;
@@ -574,7 +572,7 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
       }
     });
     const om   = inp.omPerYear * Math.pow(1 + inp.omEsc/100, yr-1);
-    const batR = yr === inp.batReplaceYear ? battery.costEGP : 0;
+    const batR = (!noBat && yr === inp.batReplaceYear) ? battery.costEGP : 0;
     const net  = yearSav - om - batR;
     cum += net;
     if (!pb && cum >= sysC) pb = yr;
@@ -630,7 +628,7 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
         }
       }
       const om2  = adjInp.omPerYear * Math.pow(1+adjInp.omEsc/100, y.yr-1);
-      cum2 += sav2 - om2 - (y.yr===inp.batReplaceYear ? battery.costEGP : 0);
+      cum2 += sav2 - om2 - (!noBat && y.yr===inp.batReplaceYear ? battery.costEGP : 0);
     });
     const adjSysC = varKey==="sysCAdj" ? sysC*(1+delta) : sysC;
     return cum2 - adjSysC;
@@ -675,6 +673,7 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
     perfRatio:perfRatio.toFixed(3), iamLoss:iamLoss.toFixed(3), annGenIAM:Math.round(annGenIAM),
     shadeFactor:shadeFactor.toFixed(3), horizonFactor:horizonFactor.toFixed(3),
     totalSysC3:sysC*inp.nVillas, totalNetGain3:netGain*inp.nVillas,
+    noBat,
   };
 }
 

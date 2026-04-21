@@ -207,7 +207,7 @@ export default function App() {
   const [batLib,setBLib]       = useState(SAMPLE_BATTERIES); 
   const [selPanel,setSelPanel] = useState("P01"); 
   const [selInv,setSelInv]     = useState("I04"); 
-  const [selBat,setSelBat]     = useState("B02"); 
+  const [selBat,setSelBat]     = useState("B00");
   const [locked,setLocked]     = useState({panel:false,inverter:false,battery:false}); 
   const [rankMode,setRankMode] = useState("weighted"); 
   const [showCmp,setShowCmp]   = useState(false); 
@@ -1625,16 +1625,20 @@ export default function App() {
       {l:"Performance Ratio",   v:r.perfRatio||"—",                                 c:C.accent},
       {l:"Clipping loss",       v:`${(r.clippingPct||0).toFixed(1)}%`,             c:(r.clippingPct||0)>3?C.orange:C.green},
     ]; 
-    const checks=[ 
-      {l:"Inverter sizing",   v:r.chkInvSize},{l:"DC/AC ratio",    v:r.chkDcAc   }, 
-      {l:"MPPT min",          v:r.chkMpptMin},{l:"MPPT max",       v:r.chkMpptMax}, 
-      {l:"Isc per MPPT",      v:r.chkIscMppt},{l:"Battery voltage",v:r.chkBatVolt}, 
-      {l:"Battery charge",    v:r.chkBatChg },{l:"String VD",      v:r.chkVdStr  }, 
-      {l:"Feeder VD",         v:r.chkVdFdr  },{l:"AC cable VD",    v:r.chkVdAC  }, 
-      {l:"MDB busbar",        v:r.mdbCheck  },{l:"<500kW NCEDC",   v:r.chkSize500}, 
-      {l:"Battery Circ.3",    v:r.chkBatRule},{l:"Roof fit",       v:r.roofFit?"PASS":"REVIEW"}, 
-      {l:"Inter-row shading", v:r.chkRowShade}, 
-    ]; 
+    const checks=[
+      {l:"Inverter sizing",   v:r.chkInvSize},{l:"DC/AC ratio",    v:r.chkDcAc   },
+      {l:"MPPT min",          v:r.chkMpptMin},{l:"MPPT max",       v:r.chkMpptMax},
+      {l:"Isc per MPPT",      v:r.chkIscMppt},{l:"String VD",      v:r.chkVdStr  },
+      {l:"Feeder VD",         v:r.chkVdFdr  },{l:"AC cable VD",    v:r.chkVdAC   },
+      {l:"MDB busbar",        v:r.mdbCheck  },{l:"<500kW NCEDC",   v:r.chkSize500},
+      {l:"Roof fit",          v:r.roofFit?"PASS":"REVIEW"},
+      {l:"Inter-row shading", v:r.chkRowShade},
+      ...(r.noBat ? [] : [
+        {l:"Battery voltage",  v:r.chkBatVolt},
+        {l:"Battery charge",   v:r.chkBatChg },
+        {l:"Battery Circ.3",   v:r.chkBatRule},
+      ]),
+    ];
     const allPass=checks.every(c=>c.v==="PASS"); 
     return( 
       <div> 
@@ -3083,8 +3087,8 @@ for
         ]}, 
         {title:"Cairo Site Conditions",color:C.red,fields:[ 
           {l:"Max ambient °C",k:"tAmbMax",s:1},{l:"Min ambient °C",k:"tAmbMin",s:1}, 
-          {l:"Tilt angle (°)",k:"tiltDeg",s:1,note:"Affects TMY yield and row spacing"}, 
-          {l:"Backup hours",k:"backupHours",s:1}, 
+          {l:"Tilt angle (°)",k:"tiltDeg",s:1,note:"Affects TMY yield and row spacing"},
+          ...((r?.noBat ?? battery?.kwh===0) ? [] : [{l:"Backup hours",k:"backupHours",s:1}]),
         ]}, 
         {title:"Cable Lengths (m)",color:C.red,fields:[ 
           {l:"DC string run",k:"lenStringM",s:1},{l:"DC feeder run",k:"lenFeederM",s:1}, 
@@ -3144,7 +3148,7 @@ for
             {[ 
               {key:"panel",  icon:"☀",label:"PV Panel",  color:C.yellow,sel:selPanel,fn:setSelPanel,lib:panelLib, fmt:p=>`${p.brand} — ${p.model} (${p.wp}Wp)`}, 
               {key:"inverter",icon:"🔌",label:"Inverter",  color:C.purple,sel:selInv,  fn:setSelInv,  lib:invLib,  fmt:x=>`${x.brand} — ${x.model} (${x.acKW}kW)`}, 
-              {key:"battery",icon:"🔋",label:"Battery",   color:C.blue,  sel:selBat,  fn:setSelBat,  lib:batLib,  fmt:x=>`${x.brand} — ${x.model} (${x.kwh}kWh)`}, 
+              {key:"battery",icon:"🔋",label:"Battery",   color:C.blue,  sel:selBat,  fn:setSelBat,  lib:batLib,  fmt:x=>x.id==="B00"?`⚡ ${x.model}`:x.kwh?`${x.brand} — ${x.model} (${x.kwh}kWh)`:x.model}, 
             ].map(({key,icon,label,color,sel,fn,lib,fmt})=>{ 
               const isL=locked[key]; 
               return( 
@@ -4121,7 +4125,9 @@ for</div>
               <div style={{fontSize:10,color:C.muted}}>
                 <span style={{color:C.yellow}}>{panel.brand} {panel.wp}Wp{panel.bifacial?" ★Bifacial":""}</span>
                 {inverter&&<span style={{color:"#8b5cf6"}}> · {inverter.brand} {inverter.acKW}kW</span>}
-                {battery&&<span style={{color:C.blue}}> · {battery.brand} {battery.kwh}kWh</span>}
+                {battery&&(battery.kwh===0
+                  ? <span style={{color:C.muted}}> · Grid-Tied (No Storage)</span>
+                  : <span style={{color:C.blue}}> · {battery.brand} {battery.kwh}kWh</span>)}
               </div>
             </div>
           )}

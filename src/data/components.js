@@ -37,6 +37,11 @@ export const SAMPLE_INVERTERS = [
   { id:"I17", brand:"Victron Energy",model:"Quattro-II 48/10000",         acKW:8,  dcAcRatio:1.1,  vdcMax:1000, mpptMin:140, mpptMax:960,  iscPerMppt:35, numMppt:3, batVoltMin:38,  batVoltMax:66,  batChargeKW:8,  eta:96.0, thd:3.0, certifications:"CE, EN 50438",                          costEGP:115000 },
   { id:"I18", brand:"Solis",         model:"S6-EH1P5K-L Hybrid 5kW",     acKW:5,  dcAcRatio:1.3,  vdcMax:600,  mpptMin:80,  mpptMax:560,  iscPerMppt:22, numMppt:2, batVoltMin:40,  batVoltMax:60,  batChargeKW:5,  eta:97.6, thd:3.0, certifications:"IEC 62109, IEC 62116",                  costEGP:35000  }, ];
 export const SAMPLE_BATTERIES = [
+  { id:"B00", brand:"Grid-Tied", model:"No Storage — Direct Use Only",
+    kwh:0, voltage:0, dod:0, eta:100, cycleLife:0, cRate:0,
+    tempMin:-20, tempMax:60, chemistry:"N/A", bms:"N/A",
+    warranty:0, costEGP:0, certifications:"N/A",
+    dimL:0, dimW:0, dimH:0, weightKg:0 },
   { id:"B01", brand:"Sungrow",       model:"SBR256 25.6kWh (7×SBR064)",        kwh:25.6,  voltage:256, dod:90, eta:96.5, cycleLife:6000, cRate:0.5, tempMin:0,   tempMax:50, dimL:640, dimW:200, dimH:1800, weightKg:240, chemistry:"LiFePO4",          bms:"Integrated",            warranty:10, costEGP:130000, certifications:"IEC 62619, UN38.3, TÜV Rheinland" },
 
   { id:"B02", brand:"Sungrow",       model:"SBR192 19.2kWh (5×SBR064)",        kwh:19.2,  voltage:192, dod:90, eta:96.5, cycleLife:6000, cRate:0.5, tempMin:0,   tempMax:50, dimL:640, dimW:200, dimH:1500, weightKg:185, chemistry:"LiFePO4",          bms:"Integrated",            warranty:10, costEGP:100000, certifications:"IEC 62619, UN38.3" },

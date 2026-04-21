@@ -7,25 +7,15 @@ export function runHourlyDispatch(hourlyGenKwp, actKwp, etaSysFixed, soilingByMo
   const { gpoa, tamb, panel, zeroExport, meterDemands, gbeam, gdiff, windspeed: wsArr, lat, tilt, az } = opts || {};
   const DAYS = [31,28,31,30,31,30,31,31,30,31,30,31];
   const yr   = yearOffset || 0;
+  const noBat = !battery || battery.kwh === 0;
 
   // Battery SOH: LiFePO4 -2%/yr, floor 70% (IEC 62619)
-  const sohFactor  = Math.max(0.70, 1 - 0.02 * yr);
-  // E3: split round-trip eta symmetrically: sqrt for charge, sqrt for discharge
-  const etaChg     = Math.sqrt((battery.eta || 95) / 100);
-  const etaDch     = Math.sqrt((battery.eta || 95) / 100);
-
-
-
-
-  // Applied as an additional factor on top of SOH
-  // D1: Battery temp derate computed per-month in dispatch loop using actual tamb
-  // (moved from fixed pre-loop scalar to monthly variable — see mi loop below)
-  const usableCapBase = battery.kwh * (battery.dod/100) * sohFactor;
-  // Monthly usableCap with temperature derate is computed per-month below
-  const minSOCBase  = usableCapBase * 0.10; // 10% reserve floor (base, scaled per month)
-
-  const maxChargekW = inverter.batChargeKW || battery.kwh;
-  const maxDischkW  = battery.kwh * (battery.cRate || 1.0);
+  const sohFactor  = noBat ? 1 : Math.max(0.70, 1 - 0.02 * yr);
+  const etaChg     = noBat ? 1 : Math.sqrt((battery.eta || 95) / 100);
+  const etaDch     = noBat ? 1 : Math.sqrt((battery.eta || 95) / 100);
+  const usableCapBase = noBat ? 0 : battery.kwh * (battery.dod/100) * sohFactor;
+  const maxChargekW = noBat ? 0 : (inverter.batChargeKW || battery.kwh);
+  const maxDischkW  = noBat ? 0 : battery.kwh * (battery.cRate || 1.0);
   const invAcKW     = inverter.acKW || 999; // E1: clipping ceiling
   // B1: Part-load inverter efficiency from OND curve (E19)
   // effCurve = [{pct, eta}] sorted by pct ascending
@@ -150,33 +140,31 @@ export function runHourlyDispatch(hourlyGenKwp, actKwp, etaSysFixed, soilingByMo
 
         let gridImport=0, curtailed=0;
         if (net >= 0) {
-          // Surplus: charge battery first
-          // E3: energy stored = electrical_in * etaChg (charging loss)
-          const canCharge  = Math.min((usableCap - soc) / etaChg, maxChargekW);
-          const chargeElin = Math.min(net, canCharge);
-          soc             += chargeElin * etaChg;
-          totalBatChgKwh  += chargeElin;
-          const afterCharge = net - chargeElin;
-          // E17: zero-export — curtail remainder instead of exporting
-          if (zeroExport) {
-            curtailed       = afterCharge; // curtailed on AC side
+          if (!noBat) {
+            // Surplus: charge battery first
+            const canCharge  = Math.min((usableCap - soc) / etaChg, maxChargekW);
+            const chargeElin = Math.min(net, canCharge);
+            soc             += chargeElin * etaChg;
+            totalBatChgKwh  += chargeElin;
+            const afterCharge = net - chargeElin;
+            if (zeroExport) { curtailed = afterCharge; }
+            else            { totalExportKwh += afterCharge; }
           } else {
-            curtailed       = 0;
-            totalExportKwh += afterCharge;
+            if (zeroExport) { curtailed = net; }
+            else            { totalExportKwh += net; }
           }
         } else {
-          // Deficit: discharge battery first
-
-
-
-          const needed     = -net;
-          // E3: energy delivered = soc_drawn * etaDch (discharging loss)
-          const canDrawSOC = Math.min((soc - minSOC), maxDischkW / etaDch);
-          const socDrawn   = Math.max(0, Math.min(needed / etaDch, canDrawSOC));
-          const delivered  = socDrawn * etaDch;
-          soc             -= socDrawn;
-          totalBatDischKwh += delivered;
-          gridImport       = Math.max(0, needed - delivered);
+          const needed = -net;
+          if (!noBat) {
+            const canDrawSOC = Math.min((soc - minSOC), maxDischkW / etaDch);
+            const socDrawn   = Math.max(0, Math.min(needed / etaDch, canDrawSOC));
+            const delivered  = socDrawn * etaDch;
+            soc             -= socDrawn;
+            totalBatDischKwh += delivered;
+            gridImport       = Math.max(0, needed - delivered);
+          } else {
+            gridImport = needed; // all deficit from grid — no storage
+          }
           totalGridKwh    += gridImport;
           if (h>=17 && h<=22) eveningDeficits[mi] += gridImport;
         }
