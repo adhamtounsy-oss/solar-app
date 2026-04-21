@@ -618,7 +618,7 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
     cfYears.forEach(y => {
       const deg2 = Math.pow(1-adjInp.panelDeg/100, y.yr-1);
       const esc2 = Math.pow(1+adjInp.tariffEsc/100, y.yr-1);
-      const genMo2 = annGenTMY * deg2 * (inp.yieldMode===p90 ? P90_FACTOR : 1) * scFrac / 12;
+      const genMo2 = annGenTMY * deg2 * (inp.yieldMode==="p90" ? P90_FACTOR : 1) * scFrac / 12;
       let sav2 = 0;
       for (let mi=0; mi<12; mi++) {
         const loadMo = monthlyLoadKwh[mi] || (annLoadKwh / 12);

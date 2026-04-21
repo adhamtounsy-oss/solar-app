@@ -434,6 +434,12 @@ export default function App() {
   }, [inp.lat, inp.lon, inp.systemKwp, inp.panelDeg, inp.yieldMode,
       inp.analysisPeriod, inp.discountRate]);
 
+  const panel    = useMemo(() => panelLib.find(p => p.id===selPanel) || panelLib[0], [panelLib, selPanel]);
+  const inverter = useMemo(() => invLib.find(x => x.id===selInv)    || invLib[0],    [invLib, selInv]);
+  const battery  = useMemo(() => batLib.find(b => b.id===selBat)    || batLib[0],    [batLib, selBat]);
+  const r        = useMemo(() => calcEngine(inp, panel, inverter, battery, pvgisData),
+                            [inp, panel, inverter, battery, pvgisData]);
+
   // -- Monte Carlo yield distribution ----------------------------------------
   useEffect(() => {
     if (!r || !r.annGenTMY) { setYieldDist(null); return; }
@@ -462,13 +468,7 @@ export default function App() {
   useEffect(() => {
     const grp = NAV_GROUPS.find(g => g.tabs.some(t => t.id === tab));
     if (grp && grp.id !== navGroup) setNavGroup(grp.id);
-  }, [tab]); 
-
-  const panel    = useMemo(() => panelLib.find(p => p.id===selPanel) || panelLib[0], [panelLib, selPanel]); 
-  const inverter = useMemo(() => invLib.find(x => x.id===selInv)    || invLib[0],    [invLib, selInv]); 
-  const battery  = useMemo(() => batLib.find(b => b.id===selBat)    || batLib[0],    [batLib, selBat]); 
-  const r        = useMemo(() => calcEngine(inp, panel, inverter, battery, pvgisData), 
-                            [inp, panel, inverter, battery, pvgisData]); 
+  }, [tab]);
   // -- Workflow completeness — drives nav group badges ------------------------
   const completeness = useMemo(() => {
     const loadOk = inp.loadMethod==="meter"

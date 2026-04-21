@@ -133,10 +133,7 @@ export async function fetchPVGIS(lat, lon, tilt, azimuth) {
   const aspect = azimuth || 0;
 
   const pvgisUrl =
-    `https://re.jrc.ec.europa.eu/api/v5_2/seriescalc?` +
-    `lat=${lat}&lon=${lon}&startyear=2020&endyear=2020` +
-    `&pvcalculation=1&peakpower=1&loss=0&angle=${tilt}&aspect=${aspect}` +
-    `&outputformat=json&browser=0&components=1`;
+    `/api/pvgis?lat=${lat}&lon=${lon}&tilt=${tilt}&azimuth=${aspect}`;
 
   const controller = new AbortController();
   const timeout    = setTimeout(() => controller.abort(), 45000); // 45s timeout
