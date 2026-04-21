@@ -566,7 +566,8 @@ export default function App() {
       : 1; 
     return computeLoadProfile(inp, billScale2, 1); 
   }, [inp]); 
-  const fmtE = v => "E\xa3" + (v/1000).toFixed(0) + "K"; 
+  const fmtE = v => "E\xa3" + (v/1000).toFixed(0) + "K";
+  const yGen = r ? (inp.yieldMode==="p90" ? r.annGenP90 : r.annGenTMY) : 0;
   const fmtU = v => "$" + (v/inp.usdRate/1000).toFixed(0) + "K"; 
 
   const handleGenerateProposal = useCallback(async () => { 
@@ -700,7 +701,7 @@ export default function App() {
     const fixedLoss= stc * (1 - 0.98*0.98*0.99*0.99*0.98*0.98); 
     const shadeLoss= stc * (1 - parseFloat(r.shadeFactor||1)) * 0.8; 
     const clipLoss = r.clippingKwh || 0; 
-    const delivered= r.annGenTMY  || 0; 
+    const delivered= yGen  || 0;
     return [ 
       { label:"STC Reference",    value:stc,        color:"#22d3ee", isBase:true }, 
       { label:"Temperature loss", value:tempLoss,   color:"#ef4444" }, 
@@ -784,7 +785,7 @@ export default function App() {
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:14}}> 
           {[ 
             {l:"Data source",       v:isHourly?"PVGIS hourly ✓":"Monthly fallback",   c:isHourly?C.green:C.yellow}, 
-            {l:"Annual yield",      v:`${(r.annGenTMY/1000).toFixed(2)} MWh`,          c:C.yellow}, 
+            {l:`Annual yield (${inp.yieldMode==="p90"?"P90":"P50"})`, v:`${(yGen/1000).toFixed(2)} MWh`, c:inp.yieldMode==="p90"?C.yellow:C.green}, 
             {l:"Self-consumption",  v:`${r.annSCPct!=null?r.annSCPct.toFixed(1):r.profileSCPct.toFixed(1)}%`, c:C.green}, 
             {l:"Grid import/yr",    v:isHourly?`${(r.dispatch.totalGridKwh/1000).toFixed(1)} MWh`:"—", c:C.blue}, 
             {l:"Export/yr",         v:isHourly?`${(r.dispatch.totalExportKwh/1000).toFixed(1)} MWh`:"—", c:C.muted}, 
@@ -841,7 +842,7 @@ export default function App() {
               {isHourly&&<span><span style={{color:`${C.green}60`}}>■</span> Self-consumed 
 (green overlay)</span>} 
               <span style={{marginLeft:"auto",color:C.accent,fontWeight:700}}> 
-                Annual: {(r.annGenTMY/1000).toFixed(2)} MWh/yr 
+                Annual ({inp.yieldMode==="p90"?"P90":"P50"}): {(yGen/1000).toFixed(2)} MWh/yr
                 {!isHourly&&<span style={{color:C.yellow}}> · Fetch PVGIS for soiling-corrected hourly simulation</span>} 
               </span> 
             </div> 
@@ -975,8 +976,8 @@ export default function App() {
                 })} 
                 <tr style={{background:`${C.yellow}15`,borderTop:`2px solid ${C.yellow}`}}> 
                   <td colSpan={6} style={{padding:"8px 12px",color:C.yellow,fontWeight:800}}>ANNUAL TOTAL</td> 
-                  <td style={{padding:"8px 12px",textAlign:"right",color:C.yellow,fontWeight:800}}>{r.annGenTMY.toFixed(0)}</td> 
-                  <td style={{padding:"8px 12px",textAlign:"right",color:C.yellow,fontWeight:800}}>{r.annGenTMY.toFixed(0)}</td> 
+                  <td style={{padding:"8px 12px",textAlign:"right",color:C.yellow,fontWeight:800}}>{yGen.toFixed(0)}</td>
+                  <td style={{padding:"8px 12px",textAlign:"right",color:C.yellow,fontWeight:800}}>{yGen.toFixed(0)}</td>
                 </tr> 
               </tbody> 
             </table> 
@@ -1535,7 +1536,7 @@ export default function App() {
               {[{l:r.roofCapped?"Roof-limited ⚠":"Solar-supplied",v:r.roofCapped?`${r.coverageActual.toFixed(0)}% coverage`:`${r.solarKwh.toFixed(0)} kWh/d`,c:r.roofCapped?C.red:C.orange}, 
                 {l:"Grid-supplied", v:`${(r.loadTot-r.solarKwh).toFixed(0)} kWh/d`,c:C.blue}, 
                 {l:"Array",         v:`${r.actKwp.toFixed(1)} kWp`,c:C.yellow}, 
-                {l:"Annual (TMY)",  v:`${(r.annGenTMY/1000).toFixed(1)} MWh`,c:C.green}, 
+                {l:`Annual (${inp.yieldMode==="p90"?"P90":"P50"})`, v:`${(yGen/1000).toFixed(1)} MWh`,c:inp.yieldMode==="p90"?C.yellow:C.green}, 
                 {l:"Payback",       v:r.pb?`${r.pb} yrs`:">25",c:C.green}, 
                 {l:"25yr gain",     v:fmtE(r.netGain),c:C.green}].map(k=>( 
                 <div key={k.l} style={{background:"#0f172a",borderRadius:8,padding:"10px 12px",borderLeft:`3px solid ${k.c}`}}> 
@@ -1610,7 +1611,7 @@ export default function App() {
       {l:"Selected battery",  v:`${battery?.brand} ${battery?.kwh}kWh`,             c:C.blue  }, 
       {l:"Array per villa",   v:`${r.actKwp.toFixed(1)} kWp (${r.totP} panels)`,    c:C.yellow}, 
       {l:"Coverage",          v:r.roofCapped?`${r.coverageActual.toFixed(0)}% (roof-ltd)`:`${r.effPct.toFixed(0)}% offset`, c:r.roofCapped?C.red:C.orange}, 
-      {l:r.tmySource==="pvgis"?"Annual yield (PVGIS ✓)":"Annual yield (fallback)",v:`${(r.annGenTMY/1000).toFixed(2)} MWh/villa`,c:r.tmySource==="pvgis"?C.green:C.yellow}, 
+      {l:r.tmySource==="pvgis"?`Annual yield ${inp.yieldMode==="p90"?"P90 ":""}(PVGIS ✓)`:`Annual yield ${inp.yieldMode==="p90"?"P90 ":""}(fallback)`,v:`${(yGen/1000).toFixed(2)} MWh/villa`,c:r.tmySource==="pvgis"?C.green:C.yellow}, 
       {l:r.tmySource==="pvgis"?"SC rate (simulated)":"SC rate (approx)",v:`${r.annSCPct!=null?r.annSCPct.toFixed(1):r.profileSCPct.toFixed(1)}%`,c:r.tmySource==="pvgis"?C.green:C.yellow}, 
       {l:"Cost per villa",    v:fmtE(r.sysC),                                       c:C.red   }, 
       {l:"3-villa total",     v:fmtE(r.totalSysC3),                                 c:C.red   }, 
@@ -2456,12 +2457,9 @@ export default function App() {
             <Row label="▶ Total panels" shade={false}><td/><Calc v={r.totP} dp={0} big/></Row> 
             <Row label="▶ Actual array (kWp)" shade={true}><td/><Calc v={r.actKwp} unit="kWp" dp={2} big/></Row> 
             <Row label="DC/AC ratio" shade={false}><td/><Calc v={r.dcAc} dp={2}/></Row> 
-            <Row label="Annual yield — TMY" shade={true} note="12 months × temp-corrected η"> 
-
- 
- 
-              <td style={{padding:"6px 12px",textAlign:"right",color:C.green,fontSize:10}}>TMY</td> 
-              <Calc v={r.annGenTMY} unit="kWh/yr" dp={0} big/> 
+            <Row label={`Annual yield — ${inp.yieldMode==="p90"?"P90 (×0.92)":"TMY P50"}`} shade={true} note="12 months × temp-corrected η">
+              <td style={{padding:"6px 12px",textAlign:"right",color:C.green,fontSize:10}}>{inp.yieldMode==="p90"?"P90":"P50"}</td>
+              <Calc v={yGen} unit="kWh/yr" dp={0} big/>
             </Row> 
             <Row label="Annual yield — flat PSH" shade={false} note="Legacy single-PSH estimate"> 
               <td/><Calc v={r.annGenFlat} unit="kWh/yr" dp={0}/> 
@@ -3901,7 +3899,7 @@ for</div>
               marginBottom:28,padding:14,background:"#f8fafc",borderRadius:8}}> 
               {[ 
                 {l:"System Size",     v:r.actKwp.toFixed(1) + " kWp"}, 
-                {l:"Annual Yield",    v:(r.annGenTMY/1000).toFixed(1) + " MWh"}, 
+                {l:`Annual Yield (${inp.yieldMode==="p90"?"P90":"P50"})`, v:(yGen/1000).toFixed(1) + " MWh"}, 
                 {l:"Self-Consumption",v:(r.annSCPct||r.profileSCPct||0).toFixed(0) + "%"}, 
                 {l:"Payback Period",  v:r.pb ? r.pb + " Years" : ">25 Yrs"}, 
                 {l:"25-Year IRR",     v:r.irr + "%"}, 
