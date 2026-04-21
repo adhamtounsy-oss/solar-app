@@ -1,0 +1,68 @@
+import { C, DESIGN_PSH, CAIRO_SOILING } from "../constants/index.js";
+
+export const NAV_GROUPS = [
+  { id:"setup",   label:"Setup",   color:"#14b8a6", tabs:[
+    { id:"projects", icon:"💾", label:"Projects"       },
+    { id:"load",     icon:"⚡", label:"Load"           },
+    { id:"library",  icon:"📚", label:"Equipment"      },
+    { id:"coverage", icon:"🎯", label:"Sizing"         },
+  ]},
+  { id:"design",  label:"Design",  color:C.yellow,  tabs:[
+    { id:"solar",    icon:"☀",  label:"Solar Resource" },
+    { id:"p3",       icon:"🔆", label:"Array Design"   },
+    { id:"p4",       icon:"🔋", label:"Battery"        },
+    { id:"p5",       icon:"🔌", label:"Inverter"       },
+    { id:"p6",       icon:"🔗", label:"Wiring"         },
+  ]},
+  { id:"results", label:"Results", color:C.green,   tabs:[
+    { id:"dashboard",icon:"📊", label:"Dashboard"      },
+    { id:"financial",icon:"💰", label:"Financial"      },
+    { id:"optimizer",icon:"📈", label:"Sensitivity"    },
+    { id:"recommend",icon:"🤖", label:"Optimiser"      },
+  ]},
+  { id:"export",  label:"Export",  color:C.pink,    tabs:[
+    { id:"proposal", icon:"📄", label:"Proposal"       },
+    { id:"sld",      icon:"📐", label:"SLD"            },
+    { id:"bom",      icon:"📦", label:"BOM"            },
+    { id:"inputs",   icon:"📋", label:"Advanced"       },
+  ]},];
+
+export const DEF = {
+  projectRef:"Solar PV — 1st Settlement", clientName:"Al-Rashid Family",
+  villaRef:"Villa A", address:"1st Settlement, New Cairo, Egypt",
+  engineer:"Eng. Ahmed Hassan", companyName:"SolarTech Egypt",
+  floorAreaM2:500, roofAreaM2:220, roofObstructionsM2:30, roofDepthM:12, nVillas:3,
+  mountMode:"roof", groundAreaM2:0,
+  lat:30.06, lon:31.45, azimuth:0,
+  supplyPhase:"three", supplyVoltageLN:220, supplyVoltageLL:380,
+  supplyAmps:100, mdbBusbarA:200, monthlyBillEGP:5000,
+  acUnits:3, acTonnage:1.5, acCOP:3.0, acHrsSummer:6, acHrsWinter:1,
+  lightingAreaM2:250, whKW:2.0, whHrs:2,
+  kitchenW:2500, kitchenHrs:2, laundryW:1500, laundryHrs:1,
+  poolKW:1.5, poolHrs:6, miscKW:1.5, miscHrs:8,
+  loadMethod:"profile", coverageMode:"percentage", offsetPct:80,
+  solarAC:true, solarLighting:true, solarWH:false,
+  solarKitchen:false, solarLaundry:false, solarPool:true, solarMisc:false,
+  batEveningCovPct:80, backupHours:8, invNumMppt:2,
+  tAmbMax:42, tAmbMin:5, pshDesign:DESIGN_PSH, tiltDeg:22,
+
+  lenStringM:25, lenFeederM:15, lenBatteryM:3, lenACM:20,
+  tariffNow:1.95, tariffEsc:18, tariffMode:"tiered",
+  omPerYear:3000, omEsc:3, panelDeg:0.65,
+  usdRate:55, analysisPeriod:25, batReplaceYear:12,
+  yieldMode:"p50",
+  netMeteringEnabled:false,
+  netMeteringRate:0.50,
+  touEnabled:false, touPeakStart:17, touPeakEnd:22, gridChargeEnabled:false,
+  costPerOptimizerUSD:30, shadingLossFraction:0.05,
+  lang:"en",
+  discountRate:12,
+  albedo:0.20,
+  bifacialFactor:0.70,
+  soilProfile:[0.02,0.02,0.09,0.11,0.08,0.02,0.02,0.02,0.02,0.03,0.02,0.02],
+  obstacles:[],
+  horizonProfile:[],
+  subArrays:[],
+  prof_AC:[0.3,0.8,0.6], prof_Light:[0.2,0.0,1.0], prof_WH:[0.8,0.0,0.5],
+  prof_Kitchen:[0.5,0.2,0.8], prof_Laundry:[0.0,0.8,0.2],
+  prof_Pool:[0.0,1.0,0.0], prof_Misc:[0.2,0.3,0.5], };
