@@ -111,7 +111,15 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
   const tiltRad    = (inp.tiltDeg*Math.PI)/180;
   const panelVertM = (panel.dimL/1000)*Math.sin(tiltRad);
   const panelBaseM = (panel.dimL/1000)*Math.cos(tiltRad);
-  const altRad     = (18*Math.PI)/180; // Dec 21, 9am Cairo — conservative design altitude
+  // Solar altitude at Dec 21, 9am local solar time — computed from site latitude
+  // dec = −23.45° (winter solstice), hour angle = −45° (3h before noon)
+  const _decRad = (-23.45 * Math.PI) / 180;
+  const _haRad  = (-45    * Math.PI) / 180;
+  const _latRad = ((inp.lat || 30) * Math.PI) / 180;
+  const altDeg  = Math.asin(
+    Math.sin(_latRad)*Math.sin(_decRad) + Math.cos(_latRad)*Math.cos(_decRad)*Math.cos(_haRad)
+  ) * 180 / Math.PI;
+  const altRad  = Math.max(5 * Math.PI / 180, altDeg * Math.PI / 180); // clamp ≥ 5° (polar edge)
   const minPitch   = panelBaseM + panelVertM/Math.tan(altRad);
   const roofDepth  = inp.roofDepthM || 12;
   const maxRows    = Math.max(1, Math.floor(roofDepth/minPitch));
@@ -183,6 +191,12 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
   const tmySource  = hourlyData ? "pvgis" : "fallback";
   const tmyMonthly = hourlyData ? hourlyData.monthly : CAIRO_TMY_FALLBACK;
 
+  // Elevation lapse rate correction for fallback path only.
+  // PVGIS ERA5 already provides site-specific temperatures; the fallback table is
+  // calibrated to Cairo (~74 m ASL). For other elevations apply ISA −6.5 °C/1000 m.
+  const elevM     = inp.elevationM != null ? inp.elevationM : 74; // default = Cairo baseline
+  const elevCorr  = tmySource === "fallback" ? -((elevM - 74) / 1000) * 6.5 : 0;
+
   // Monthly generation — always computed for display and monthly financial model
   // v4: bifacial gain multiplier applied when panel.bifacial is true
   const bifacialMult = panel.bifacial ? 1 + (panel.bifacialGain || 0) / 100 : 1;
@@ -191,9 +205,10 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
   const invEtaFrac = (inverter.eta || 97.6) / 100;
 
   const monthlyGen = tmyMonthly.map((mo, mi) => {
-    const etaMo = computeEtaSys(panel, mo.tAmb);
+    const tAmbCorr = mo.tAmb + elevCorr;
+    const etaMo = computeEtaSys(panel, tAmbCorr);
     const soilF = 1 - ((inp.soilProfile && inp.soilProfile[mi]) || CAIRO_SOILING[mi] || 0.02);
-    return { m:mo.m, psh:mo.psh, tAmb:mo.tAmb, days:mo.days, soilFactor:soilF,
+    return { m:mo.m, psh:mo.psh, tAmb:tAmbCorr, days:mo.days, soilFactor:soilF,
              gen: actKwp * mo.psh * mo.days * etaMo * soilF * bifacialMult * invEtaFrac };
   });
   const annGenTMY  = monthlyGen.reduce((s,m)=>s+m.gen, 0);
@@ -669,6 +684,7 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
     clippingKwh: dispatch?.clippingKwh||0, clippingPct: dispatch?.clippingPct||0,
     panelVertM, panelBaseM, minPitch, maxRows, panelsPerRow,
     maxPanelsNoShade, rowShadeOk, interRowLossPct, chkRowShade,
+    solarAltDeg: parseFloat(altDeg.toFixed(1)), elevCorr,
     usableBat, autonomy, designE, batRulePct, eveningDeficit,
     peakDemandKW, chkInvSize, chkDcAc, chkMpptMin, chkMpptMax, chkIscMppt,
     chkBatVolt, chkBatChg, chkBatRule, allOk,

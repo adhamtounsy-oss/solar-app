@@ -300,18 +300,25 @@ export default function App() {
       setPvgisMsg("✅ PVGIS ERA5 loaded — 8,760 hourly values · Dec PSH: " + decPsh.toFixed(2) + "h · Ann avg: " + annPsh.toFixed(2) + "h/day · Hourly dispatch active"); 
     } catch(e) { 
       setPvgisStatus("error"); 
-      setPvgisMsg("❌ " + e.message + " — workbook will use built-in Cairo monthly TMY fallback."); 
+      setPvgisMsg("❌ " + e.message + " — workbook will use built-in monthly TMY fallback.");
     } 
   }, [inp.lat, inp.lon, inp.tiltDeg, inp.azimuth]); 
 
   const handleLocationPick = useCallback((newLat, newLon, name, elev) => {
-    upd("lat",          newLat);
-    upd("lon",          newLon);
-    upd("locationName", name  || "");
-    upd("elevationM",   elev  ?? null);
+    setInp(prev => ({
+      ...prev,
+      lat:          newLat,
+      lon:          newLon,
+      locationName: name || "",
+      elevationM:   elev ?? null,
+      // Auto-fill address from reverse geocode only when blank or still factory default
+      address: (!prev.address || prev.address === DEF.address)
+        ? (name || prev.address)
+        : prev.address,
+    }));
     setShowLocationPicker(false);
-    // pvgisKey effect auto-triggers fetch on lat/lon change
-  }, [upd]);
+    // pvgisKey effect auto-triggers PVGIS fetch on lat/lon change
+  }, []);
 
   // Project handlers — all promise-based, no async in JSX
   const handleSaveProject = useCallback(() => { 
@@ -385,7 +392,7 @@ export default function App() {
           const decPsh = data.monthly[11].psh;
           setPvgisMsg("✅ PVGIS ERA5 · Dec PSH: "+decPsh.toFixed(2)+"h · Annual avg: "+annPsh.toFixed(2)+"h/day · Hourly dispatch active");
         })
-        .catch(e => { setPvgisStatus("error"); setPvgisMsg("❌ "+e.message+" — using Cairo monthly fallback"); });
+        .catch(e => { setPvgisStatus("error"); setPvgisMsg("❌ "+e.message+" — using monthly TMY fallback"); });
     }, 800);
     return () => clearTimeout(pvgisTimerRef.current);
   }, [pvgisKey]);
@@ -509,7 +516,7 @@ export default function App() {
         msg:`DC/AC ratio ${r.dcAc.toFixed(2)} exceeds 1.58 — high clipping risk. Reduce panels or increase inverter size.`});
     else if (r.dcAc > 1.45)
       w.push({id:"dcac",   sev:"orange", scope:"sizing",
-        msg:`DC/AC ratio ${r.dcAc.toFixed(2)} — moderate clipping. Acceptable for Cairo high-irradiance, verify clipping < 3%.`});
+        msg:`DC/AC ratio ${r.dcAc.toFixed(2)} — moderate clipping. Acceptable for high-irradiance sites; verify clipping < 3%.`});
     // String Voc vs inverter max
     if (r.strVoc > (inverter?.vdcMax || 1000) * 0.95)
       w.push({id:"voc",    sev:"red",    scope:"array",
@@ -2529,7 +2536,7 @@ export default function App() {
         {/* IMPROVEMENT 2: Row spacing section */} 
         <div style={cardS(r.rowShadeOk?C.green:C.orange)}> 
           <div style={{padding:"10px 14px",color:"white",fontWeight:800,display:"flex",justifyContent:"space-between",alignItems:"center"}}> 
-            <span>📐 Inter-Row Shading Analysis — Dec 21, 9am (Solar alt. 18°, Cairo)</span> 
+            <span>📐 Inter-Row Shading Analysis — Dec 21, 9am (Solar alt. {r.solarAltDeg != null ? r.solarAltDeg.toFixed(1) : "18.0"}°, lat {(inp.lat||30).toFixed(1)}°)</span>
             <span style={{fontSize:10,padding:"3px 10px",borderRadius:12,fontWeight:700, background:`${inp.mountMode==="ground"?C.yellow:inp.mountMode==="hybrid"?C.green:C.accent}22`, color:inp.mountMode==="ground"?C.yellow:inp.mountMode==="hybrid"?C.green:C.accent}}> 
 
 
@@ -3133,11 +3140,12 @@ for
           {l:"Laundry hrs",k:"laundryHrs",s:0.5},{l:"Pool (kW)",k:"poolKW",s:0.5}, 
           {l:"Pool hrs",k:"poolHrs",s:0.5},{l:"Misc (kW)",k:"miscKW",s:0.5},{l:"Misc hrs",k:"miscHrs",s:0.5}, 
         ]}, 
-        {title:"Cairo Site Conditions",color:C.red,fields:[ 
-          {l:"Max ambient °C",k:"tAmbMax",s:1},{l:"Min ambient °C",k:"tAmbMin",s:1}, 
+        {title:"Site Conditions",color:C.red,fields:[
+          {l:"Max ambient °C",k:"tAmbMax",s:1,note:inp.elevationM!=null&&inp.elevationM!==74?`Site elev. ${Math.round(inp.elevationM)}m — lapse-rate applied in TMY fallback`:""},
+          {l:"Min ambient °C",k:"tAmbMin",s:1},
           {l:"Tilt angle (°)",k:"tiltDeg",s:1,note:"Affects TMY yield and row spacing"},
           ...((r?.noBat ?? battery?.kwh===0) ? [] : [{l:"Backup hours",k:"backupHours",s:1}]),
-        ]}, 
+        ]},
         {title:"Cable Lengths (m)",color:C.red,fields:[ 
           {l:"DC string run",k:"lenStringM",s:1},{l:"DC feeder run",k:"lenFeederM",s:1}, 
           {l:"Battery–inverter",k:"lenBatteryM",s:1},{l:"Inverter–MDB",k:"lenACM",s:1}, 
@@ -3776,9 +3784,15 @@ export meter</text>
           ))} 
         </div> 
         <div style={cardS("#84cc16")}> 
-          <div style={{padding:"10px 16px",color:"white",fontWeight:800,fontSize:13}}> 
-            Bill of Materials — {inp.nVillas} Villa{inp.nVillas > 1 ? "s" : ""} 
-          </div> 
+          <div style={{padding:"10px 16px",color:"white",fontWeight:800,fontSize:13,
+            display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+            <span>Bill of Materials — {inp.nVillas} Villa{inp.nVillas > 1 ? "s" : ""}</span>
+            <span style={{fontWeight:400,fontSize:10,color:"rgba(255,255,255,0.7)"}}>
+              {inp.address && <span>{inp.address}</span>}
+              {inp.lat && <span> · {(inp.lat).toFixed(4)}°N, {(inp.lon||0).toFixed(4)}°E</span>}
+              {inp.elevationM != null && <span> · {Math.round(inp.elevationM)} m ASL</span>}
+            </span>
+          </div>
           <div style={{overflowX:"auto"}}> 
             <table style={{...tbl,fontSize:11}}> 
               <thead> 
@@ -3932,7 +3946,13 @@ for</div>
                   <div style={{fontSize:16,fontWeight:800,color:"#0a0f1e",marginTop:2}}> 
                     {inp.clientName || "Client"} 
                   </div> 
-                  <div style={{fontSize:12,color:"#475569",marginTop:2}}>{inp.address}</div> 
+                  <div style={{fontSize:12,color:"#475569",marginTop:2}}>{inp.address}</div>
+                  {(inp.lat||inp.lon) && (
+                    <div style={{fontSize:10,color:"#94a3b8",marginTop:2}}>
+                      {(inp.lat||0).toFixed(4)}°N, {(inp.lon||0).toFixed(4)}°E
+                      {inp.elevationM != null && ` · ${Math.round(inp.elevationM)} m ASL`}
+                    </div>
+                  )}
                 </div> 
                 <div style={{textAlign:"right"}}> 
                   <div style={{fontSize:11,color:"#64748b",textTransform:"uppercase",letterSpacing:1}}>Prepared by</div> 
@@ -4023,11 +4043,11 @@ for</div>
         </div> 
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:6}}> 
           <div style={{fontSize:10,color:C.muted}}> 
-            Default = Cairo (Khamsin peaks Mar–May). Adjust for other sites. 
+            Default soiling profile. Customize for your site's dust and pollution patterns.
           </div> 
           <button onClick={()=>upd("soilProfile",[...CAIRO_SOILING])} 
             style={{padding:"4px 12px",background:"#1e293b",border:`1px solid ${C.border}`, 
-            borderRadius:6,color:C.muted,cursor:"pointer",fontSize:11}}>Reset Cairo</button> 
+            borderRadius:6,color:C.muted,cursor:"pointer",fontSize:11}}>Reset to Default</button> 
         </div> 
       </div> 
     ); 
