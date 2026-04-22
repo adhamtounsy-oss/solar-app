@@ -11,6 +11,8 @@ import { parseSmartMeterCSV, parsePVGISJson, parsePANFile, parseONDFile, fetchPV
 import { runHourlyDispatch } from "./lib/dispatch.js";
 import { computeLoadProfile, seasonalAcScale, computeEtaSys } from "./lib/profile.js";
 import { passColor, cardS, tbl, SH, Row, Calc, Bar, TblHead } from "./components/ui/primitives.jsx";
+import LocationPickerModal from "./components/LocationPickerModal.jsx";
+import MiniMapPreview from "./components/MiniMapPreview.jsx";
 import { calcEngine, runOpt, bilinearDeg } from "./engine/calcEngine.js";
 
 /**
@@ -240,6 +242,7 @@ export default function App() {
   const [clientMode,setClientMode] = useState(false);
   // Phase 1 new state
   const [lang,setLang]               = useState(inp.lang || "en");
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [nasaWarning,setNasaWarning] = useState(null);    // NASA POWER cross-check result
   const [inputHash,setInputHash]     = useState('');       // SHA-256 QR verification
   const [yieldDist,setYieldDist]     = useState(null);     // Monte Carlo result
@@ -301,7 +304,16 @@ export default function App() {
     } 
   }, [inp.lat, inp.lon, inp.tiltDeg, inp.azimuth]); 
 
-  // Project handlers — all promise-based, no async in JSX 
+  const handleLocationPick = useCallback((newLat, newLon, name, elev) => {
+    upd("lat",          newLat);
+    upd("lon",          newLon);
+    upd("locationName", name  || "");
+    upd("elevationM",   elev  ?? null);
+    setShowLocationPicker(false);
+    // pvgisKey effect auto-triggers fetch on lat/lon change
+  }, [upd]);
+
+  // Project handlers — all promise-based, no async in JSX
   const handleSaveProject = useCallback(() => { 
     const state = {inp, selPanel, selInv, selBat}; 
     saveProject(projName, state).then(ok => { 
@@ -724,60 +736,96 @@ export default function App() {
     const MNAMES=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; 
     return( 
       <div> 
-        {/* -- Location & Azimuth Inputs -- */} 
-        <div style={cardS(C.accent)}> 
-          <div style={{padding:"10px 16px",color:"white",fontWeight:800,fontSize:13}}> 
-            📡 Site Location & PVGIS Hourly Data Fetch 
-          </div> 
-          <div style={{padding:"14px 20px"}}> 
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12,marginBottom:14}}> 
-              {[ 
-                {l:"Latitude (°N)",  k:"lat",     s:0.01, note:"New Cairo: 30.06",        tip:"Decimal degrees north. Drives solar position, declination and air-mass calculations."},
-                {l:"Longitude (°E)", k:"lon",     s:0.01, note:"New Cairo: 31.45",        tip:"Decimal degrees east. Fetches site-specific PVGIS ERA5 hourly irradiance (auto on change)."},
-                {l:"Tilt (°)",       k:"tiltDeg", s:1,    note:"0°=flat, 22°=optimal Cairo", tip:"Inclination from horizontal. Optimal ≈ latitude × 0.76 for annual yield. Auto-updates with latitude."}, 
+        {/* -- Location & PVGIS -- */}
+        <div style={cardS(C.accent)}>
+          <div style={{padding:"10px 16px",color:"white",fontWeight:800,fontSize:13}}>
+            📡 Site Location & PVGIS Hourly Data Fetch
+          </div>
+          <div style={{padding:"14px 20px"}}>
 
- 
-                {l:"Azimuth",        k:"azimuth", s:5,    note:"0=South, -90=East, +90=West"}, 
-              ].map(({l,k,s,note,tip})=>( 
-                <div key={k}> 
-                  <div style={{fontSize:10,color:C.muted,marginBottom:4,display:"flex",alignItems:"center"}}>{l}{tip&&<Tip text={tip}/>}</div>
-                  <div style={{fontSize:9,color:"#475569",marginBottom:4}}>{note}</div> 
-                  <input type="number" value={inp[k]||0} step={s} 
-                    onChange={e=>upd(k,parseFloat(e.target.value)||0)} 
-                    style={{width:"100%",background:"#0f172a",border:`2px solid ${C.accent}`, 
-                    borderRadius:8,color:C.accent,fontSize:16,fontWeight:800, 
-                    padding:"8px 12px",textAlign:"right"}}/> 
-                </div> 
-              ))} 
-            </div> 
-            <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}> 
-              <button onClick={handleFetchPVGIS} 
-                disabled={pvgisStatus==="loading"} 
-                style={{padding:"10px 24px",background:pvgisStatus==="loading"?C.border:C.accent, 
-                color:C.bg,border:"none",borderRadius:8,fontWeight:800,fontSize:13, 
-                cursor:pvgisStatus==="loading"?"not-allowed":"pointer", 
-                opacity:pvgisStatus==="loading"?0.7:1}}> 
-                {pvgisStatus==="loading"?"⏳ Fetching...":"☀ Fetch PVGIS Hourly Data"} 
-              </button> 
-              <div style={{flex:1,padding:"8px 12px",borderRadius:8,fontSize:11, 
-                background:isHourly?`${C.green}18`:pvgisStatus==="error"?`${C.red}18`:C.card, 
-                color:isHourly?C.green:pvgisStatus==="error"?C.red:C.muted, 
-                border:`1px solid ${isHourly?C.green:pvgisStatus==="error"?C.red:C.border}`}}> 
-                {pvgisMsg||"Click to fetch 8,760 hourly irradiance values for your exact location, tilt and azimuth. Required for hourly dispatch simulation."} 
-              </div> 
-            </div> 
-            {pvgisStatus==="done"&&pvgisData&&( 
-              <div style={{marginTop:10,padding:"6px 12px",background:`${C.green}12`,borderRadius:8, 
-                fontSize:10,color:C.green,display:"flex",gap:16,flexWrap:"wrap"}}> 
-                <span>Source: PVGIS-ERA5 2020</span> 
-                <span>Resolution: hourly (8,760 values)</span> 
-                <span>Tilt: {inp.tiltDeg}° · Azimuth: {inp.azimuth}°</span> 
-                <span>Soiling: Cairo schedule applied</span> 
-                <span style={{fontWeight:700}}>Dispatch: {r.dispatch?"✓ simulated":"building..."}</span> 
-              </div> 
-            )} 
-          </div> 
-        </div> 
+            {/* Row: mini-map + coordinate/tilt inputs */}
+            <div style={{display:"grid",gridTemplateColumns:"200px 1fr",gap:16,marginBottom:14,alignItems:"start"}}>
+
+              {/* Mini-map preview */}
+              <div>
+                <MiniMapPreview
+                  lat={inp.lat} lon={inp.lon}
+                  locationName={inp.locationName}
+                  elevationM={inp.elevationM}
+                  onOpen={() => setShowLocationPicker(true)}
+                />
+                <button onClick={() => setShowLocationPicker(true)}
+                  style={{width:"100%",marginTop:6,padding:"6px 0",
+                    background:"transparent",border:`1px solid ${C.accent}`,
+                    borderRadius:7,color:C.accent,fontWeight:700,fontSize:11,
+                    cursor:"pointer"}}>
+                  📍 Pick on map
+                </button>
+              </div>
+
+              {/* Numeric inputs */}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10}}>
+                {[
+                  {l:"Latitude (°N)",  k:"lat",     s:0.01, tip:"Decimal degrees north. Drives solar position, declination and air-mass calculations."},
+                  {l:"Longitude (°E)", k:"lon",     s:0.01, tip:"Decimal degrees east. Fetches site-specific PVGIS ERA5 hourly irradiance (auto on change)."},
+                  {l:"Tilt (°)",       k:"tiltDeg", s:1,    tip:"Inclination from horizontal. Optimal ≈ latitude × 0.76 for annual yield. Auto-updates with latitude."},
+                  {l:"Azimuth",        k:"azimuth", s:5,    tip:"0 = south-facing, −90 = east, +90 = west."},
+                ].map(({l,k,s,tip})=>(
+                  <div key={k}>
+                    <div style={{fontSize:10,color:C.muted,marginBottom:4,display:"flex",alignItems:"center"}}>
+                      {l}{tip&&<Tip text={tip}/>}
+                    </div>
+                    <input type="number" value={inp[k]||0} step={s}
+                      onChange={e=>upd(k,parseFloat(e.target.value)||0)}
+                      style={{width:"100%",background:"#0f172a",border:`2px solid ${C.accent}`,
+                        borderRadius:8,color:C.accent,fontSize:15,fontWeight:800,
+                        padding:"7px 10px",textAlign:"right",boxSizing:"border-box"}}/>
+                  </div>
+                ))}
+                {/* Elevation (read-only, populated by map picker) */}
+                {inp.elevationM != null && (
+                  <div>
+                    <div style={{fontSize:10,color:C.muted,marginBottom:4}}>
+                      Elevation (m) <Tip text="Site elevation above sea level — fetched automatically when you pick a location on the map."/>
+                    </div>
+                    <div style={{background:"#0f172a",border:`1px solid ${C.border}`,
+                      borderRadius:8,color:C.muted,fontSize:15,fontWeight:800,
+                      padding:"7px 10px",textAlign:"right"}}>
+                      {Math.round(inp.elevationM)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* PVGIS fetch status */}
+            <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+              <button onClick={handleFetchPVGIS}
+                disabled={pvgisStatus==="loading"}
+                style={{padding:"10px 24px",background:pvgisStatus==="loading"?C.border:C.accent,
+                  color:C.bg,border:"none",borderRadius:8,fontWeight:800,fontSize:13,
+                  cursor:pvgisStatus==="loading"?"not-allowed":"pointer",
+                  opacity:pvgisStatus==="loading"?0.7:1}}>
+                {pvgisStatus==="loading"?"⏳ Fetching...":"☀ Fetch PVGIS Hourly Data"}
+              </button>
+              <div style={{flex:1,padding:"8px 12px",borderRadius:8,fontSize:11,
+                background:isHourly?`${C.green}18`:pvgisStatus==="error"?`${C.red}18`:C.card,
+                color:isHourly?C.green:pvgisStatus==="error"?C.red:C.muted,
+                border:`1px solid ${isHourly?C.green:pvgisStatus==="error"?C.red:C.border}`}}>
+                {pvgisMsg||"Click to fetch 8,760 hourly irradiance values for your exact location, tilt and azimuth. Required for hourly dispatch simulation."}
+              </div>
+            </div>
+            {pvgisStatus==="done"&&pvgisData&&(
+              <div style={{marginTop:10,padding:"6px 12px",background:`${C.green}12`,borderRadius:8,
+                fontSize:10,color:C.green,display:"flex",gap:16,flexWrap:"wrap"}}>
+                <span>Source: PVGIS-ERA5 2020</span>
+                <span>Resolution: hourly (8,760 values)</span>
+                <span>Tilt: {inp.tiltDeg}° · Azimuth: {inp.azimuth}°</span>
+                <span style={{fontWeight:700}}>Dispatch: {r.dispatch?"✓ simulated":"building..."}</span>
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* -- Data source badge + KPIs -- */} 
 
@@ -4202,6 +4250,16 @@ for</div>
       <div style={{padding:12}}>
         {renderers[tab] ? renderers[tab]() : null}
       </div>
+
+      {/* -- Location picker modal -- */}
+      {showLocationPicker && (
+        <LocationPickerModal
+          initialLat={inp.lat}
+          initialLon={inp.lon}
+          onConfirm={handleLocationPick}
+          onCancel={() => setShowLocationPicker(false)}
+        />
+      )}
     </div>
   );
 } 

@@ -33,7 +33,7 @@ export const DEF = {
   engineer:"Eng. Ahmed Hassan", companyName:"SolarTech Egypt",
   floorAreaM2:500, roofAreaM2:220, roofObstructionsM2:30, roofDepthM:12, nVillas:3,
   mountMode:"roof", groundAreaM2:0,
-  lat:30.06, lon:31.45, azimuth:0,
+  lat:30.06, lon:31.45, azimuth:0, locationName:"", elevationM:null,
   supplyPhase:"three", supplyVoltageLN:220, supplyVoltageLL:380,
   supplyAmps:100, mdbBusbarA:200, monthlyBillEGP:5000,
   acUnits:3, acTonnage:1.5, acCOP:3.0, acHrsSummer:6, acHrsWinter:1,

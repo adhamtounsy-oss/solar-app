@@ -216,7 +216,7 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
 
   // -- Dispatch: hourly path (PVGIS data available) --------------
   let dispatch = null;
-  if (hourlyData && hourlyData.hourly && hourlyData.hourly.length === 8760) {
+  if (hourlyData && hourlyData.hourly && hourlyData.hourly.length >= 8760) {
     // Build meter-derived monthly demand profiles (E12)
     // meterData is Float32Array(8760) of kWh/hr; reshape to [12][24] avg profiles
     let meterDemands = null;
@@ -282,17 +282,31 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
     const totSolDay = actKwp * etaSys * invEtaFrac * annAvgPsh;
     hourlyGenDisplay = solarShape.map(s => genNorm>0 ? (totSolDay*s)/genNorm : 0);
   } else {
-    // Monthly fallback — use sin-bell profile approximation
-    const annAvgDailyPsh = annGenTMY / actKwp / etaSys / invEtaFrac / 365;
-    const totalSolarGen  = actKwp * etaSys * invEtaFrac * annAvgDailyPsh;
+    // Monthly fallback — sin-bell profile approximation with seasonal SC correction.
+    // SCR is computed month-by-month using the same seasonal AC scaling as the financial
+    // model (seasonalAcScale per month) so winter low-AC months don't inflate the annual figure.
     const genNorm = solarShape.reduce((s,v)=>s+v,0);
-    hourlyGenDisplay = solarShape.map(s => genNorm>0 ? (totalSolarGen*s)/genNorm : 0);
-    const scPerHour = demand.map((d,h) => Math.min(d, hourlyGenDisplay[h]));
-    const totalSC   = scPerHour.reduce((s,v)=>s+v,0);
-    profileSCPct   = totalSolarGen > 0 ? (totalSC/totalSolarGen)*100 : 80;
+    // hourlyGenDisplay uses the annual-average daily gen (for the profile display tab)
+    const annAvgDailyGen = annGenTMY / 365;
+    hourlyGenDisplay = solarShape.map(s => genNorm>0 ? (annAvgDailyGen*s)/genNorm : 0);
+    // Seasonal monthly SCR: for each month compute daily SC using that month's demand profile
+    let totalSCkwh = 0;
+    monthlyGen.forEach((mo, mi) => {
+      const acs        = seasonalAcScale(inp, mi);
+      const { demand: demH } = computeLoadProfile(inp, billScale, acs);
+      const dailyGen   = mo.gen / mo.days;
+      const moGenShape = solarShape.map(s => genNorm>0 ? (dailyGen*s)/genNorm : 0);
+      const dailySC    = demH.reduce((sc, d, h) => sc + Math.min(d, moGenShape[h]), 0);
+      totalSCkwh      += dailySC * mo.days;
+    });
+    profileSCPct   = annGenTMY > 0 ? (totalSCkwh / annGenTMY) * 100 : 80;
     annSCPct       = profileSCPct;
     annSSPct       = profileSCPct;
-    eveningDeficit = demand.slice(17,23).reduce((s,v)=>s+v,0);
+    // Use December (design month) seasonal demand to match the dispatch path's
+    // eveningDeficits[11] — avoids 45% overestimate from acs=1 (full AC year-round)
+    const acsDec = seasonalAcScale(inp, 11);
+    const { demand: demDec } = computeLoadProfile(inp, billScale, acsDec);
+    eveningDeficit = demDec.slice(17,23).reduce((s,v)=>s+v,0);
     batCyclesYear  = null;
     monthlyGridArr = null;
     monthlySCArr   = null;

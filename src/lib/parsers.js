@@ -19,7 +19,12 @@ export function parseSmartMeterCSV(text) {
 }
 
 export function parsePVGISJson(data) {
-  const rows  = data.outputs.hourly;          // 8760 objects
+  let rows = data.outputs.hourly;
+  // Strip Feb 29 when API returns a leap year (e.g. startyear=2020 → 8784 rows).
+  // Feb 29 occupies hours 1416–1439 (Jan=744h + Feb28=672h → index 1416).
+  if (rows.length > 8760) {
+    rows = [...rows.slice(0, 1416), ...rows.slice(1440)];
+  }
   const hourly    = new Float32Array(rows.map(r => (r.P        || 0) / 1000)); // kWh/kWp/h
   const gpoa      = new Float32Array(rows.map(r => (r["G(i)"]  || 0)));    // W/m² POA total
   const tamb      = new Float32Array(rows.map(r => (r.T2m      || 20)));   // °C ambient
