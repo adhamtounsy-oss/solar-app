@@ -24,8 +24,12 @@ async function reverseGeocode(lat, lon) {
       headers: { "Accept-Language": "en" },
     });
     const d = await r.json();
-    return d.display_name || "";
-  } catch { return ""; }
+    return {
+      displayName:  d.display_name || "",
+      countryCode: (d.address?.country_code || "").toLowerCase(),
+      country:      d.address?.country || "",
+    };
+  } catch { return { displayName: "", countryCode: "", country: "" }; }
 }
 
 async function fetchElevation(lat, lon) {
@@ -47,6 +51,8 @@ export default function LocationPickerModal({ initialLat, initialLon, onConfirm,
   const [lat,          setLat]          = useState(initialLat || 30.06);
   const [lon,          setLon]          = useState(initialLon || 31.45);
   const [locationName, setLocationName] = useState("");
+  const [countryCode,  setCountryCode]  = useState("");
+  const [country,      setCountry]      = useState("");
   const [elevationM,   setElevationM]   = useState(null);
   const [elevLoading,  setElevLoading]  = useState(false);
   const [query,        setQuery]        = useState("");
@@ -62,13 +68,17 @@ export default function LocationPickerModal({ initialLat, initialLon, onConfirm,
     setLon(roundedLon);
     markerRef.current?.setLatLng([roundedLat, roundedLon]);
     setLocationName("Fetching address…");
+    setCountryCode("");
+    setCountry("");
     setElevationM(null);
     setElevLoading(true);
-    const [name, elev] = await Promise.all([
+    const [geo, elev] = await Promise.all([
       reverseGeocode(roundedLat, roundedLon),
       fetchElevation(roundedLat, roundedLon),
     ]);
-    setLocationName(name);
+    setLocationName(geo.displayName);
+    setCountryCode(geo.countryCode);
+    setCountry(geo.country);
     setElevationM(elev);
     setElevLoading(false);
   }, []);
@@ -230,6 +240,12 @@ export default function LocationPickerModal({ initialLat, initialLon, onConfirm,
                 Fetching address…
               </div>
             )}
+            {country && (
+              <div style={{ fontSize: 10, color: C.accent, marginTop: 2, fontWeight: 600 }}>
+                {country}
+                {countryCode && <span style={{ color: C.muted, fontWeight: 400 }}> · tariff & soiling profile will update</span>}
+              </div>
+            )}
             <div style={{ fontSize: 9, color: "#475569", marginTop: 3 }}>
               Click map or drag pin to adjust · Drag to fine-tune position
             </div>
@@ -242,7 +258,7 @@ export default function LocationPickerModal({ initialLat, initialLon, onConfirm,
               Cancel
             </button>
             <button
-              onClick={() => onConfirm(lat, lon, locationName, elevationM)}
+              onClick={() => onConfirm(lat, lon, locationName, elevationM, countryCode)}
               style={{ padding: "9px 20px", background: C.accent, border: "none",
                 borderRadius: 8, color: C.bg, fontWeight: 800, fontSize: 12,
                 cursor: "pointer" }}>

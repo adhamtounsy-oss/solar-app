@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { C, CAIRO_TMY_FALLBACK, DESIGN_PSH, CAIRO_SOILING, P90_FACTOR, SIGMA_IRR, SIGMA_MODEL, SIGMA_TOT, WIN_HRS, WIN_START, WIN_END } from "./constants/index.js";
 import { I18N, T } from "./i18n/index.js";
 import { SAMPLE_PANELS, SAMPLE_INVERTERS, SAMPLE_BATTERIES } from "./data/components.js";
+import { COUNTRY_DATA, applyCountryProfile } from "./data/countryData.js";
 import { NAV_GROUPS, DEF } from "./config/nav.js";
 import { EGYPT_TARIFF_TIERS, tieredMonthlySaving } from "./lib/financial.js";
 import { saveProject, loadProject, listProjects, deleteProject } from "./lib/storage.js";
@@ -62,7 +63,7 @@ import { calcEngine, runOpt, bilinearDeg } from "./engine/calcEngine.js";
  * @param {Object} r    calcEngine result object
  * @returns {{type,Nd,Nc,spdRating,note}}
  */function calcSPD(inp, r) {
-  const Ng   = 2.0;    // Egypt ground flash density
+  const Ng   = inp.ng != null ? inp.ng : 2.0;  // site ground flash density (fl/km²/yr)
   const Cd   = 1.0;    // isolated structure (no nearby trees/buildings)
   const nPan = (r && r.nPanels) || Math.round((inp.systemKwp || 5) * 1000 / 580);
   const side = Math.sqrt(Math.max(1, nPan) * 2.0); // ~2 m² footprint per panel
@@ -304,20 +305,23 @@ export default function App() {
     } 
   }, [inp.lat, inp.lon, inp.tiltDeg, inp.azimuth]); 
 
-  const handleLocationPick = useCallback((newLat, newLon, name, elev) => {
-    setInp(prev => ({
-      ...prev,
-      lat:          newLat,
-      lon:          newLon,
-      locationName: name || "",
-      elevationM:   elev ?? null,
-      // Auto-fill address from reverse geocode only when blank or still factory default
-      address: (!prev.address || prev.address === DEF.address)
-        ? (name || prev.address)
-        : prev.address,
-    }));
+  const handleLocationPick = useCallback((newLat, newLon, name, elev, cc) => {
+    setInp(prev => {
+      const countryPatch = applyCountryProfile(cc, prev);
+      return {
+        ...prev,
+        ...countryPatch,
+        lat:          newLat,
+        lon:          newLon,
+        locationName: name || "",
+        elevationM:   elev ?? null,
+        // Auto-fill address from reverse geocode only when blank or still factory default
+        address: (!prev.address || prev.address === DEF.address)
+          ? (name || prev.address)
+          : prev.address,
+      };
+    });
     setShowLocationPicker(false);
-    // pvgisKey effect auto-triggers PVGIS fetch on lat/lon change
   }, []);
 
   // Project handlers — all promise-based, no async in JSX
@@ -585,7 +589,8 @@ export default function App() {
       : 1; 
     return computeLoadProfile(inp, billScale2, 1); 
   }, [inp]); 
-  const fmtE = v => "E\xa3" + (v/1000).toFixed(0) + "K";
+  const cs   = inp.currencySymbol || "E£";  // active currency symbol
+  const fmtE = v => cs + (v/1000).toFixed(0) + "K";
   const yGen = r ? (inp.yieldMode==="p90" ? r.annGenP90 : r.annGenTMY) : 0;
   const fmtU = v => "$" + (v/inp.usdRate/1000).toFixed(0) + "K"; 
 
@@ -1674,7 +1679,7 @@ export default function App() {
       {l:"IRR / ROI",         v:`${r.irr}% / ${r.roi}%`,                            c:C.green }, 
       {l:"25yr net gain/villa", v:fmtE(r.netGain),                                  c:C.green }, 
       {l:`NPV @${inp.discountRate||12}% discount`, v:fmtE(r.npvAtRate),             c:r.npvAtRate>=0?C.green:C.red}, 
-      {l:"LCOE",                v:`E£${r.lcoe}/kWh`,                                c:C.yellow}, 
+      {l:"LCOE",                v:`${cs}${r.lcoe}/kWh`,                             c:C.yellow},
       {l:"Specific yield (P50)", v:`${(r.annGenTMY/r.actKwp).toFixed(0)} kWh/kWp`, c:C.accent},
       {l:"Specific yield (P90)", v:`${(r.annGenP90/r.actKwp).toFixed(0)} kWh/kWp`, c:C.yellow},
       {l:"Performance Ratio",   v:r.perfRatio||"—",                                 c:C.accent},
@@ -1896,15 +1901,14 @@ export default function App() {
               <div style={{padding:"16px 20px"}}> 
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,alignItems:"center",marginBottom:14}}> 
                   <div> 
-                    <div style={{fontSize:12,color:C.muted,marginBottom:6}}>Monthly electricity bill 
-(EGP)</div> 
+                    <div style={{fontSize:12,color:C.muted,marginBottom:6}}>Monthly electricity bill ({inp.currency||"EGP"})</div>
                     <input type="number" value={inp.monthlyBillEGP} step={500} min={0} 
                       onChange={e=>upd("monthlyBillEGP",parseFloat(e.target.value)||0)} 
                       style={{width:"100%",background:"#0f172a",border:`2px solid ${C.orange}`, 
                       borderRadius:8,color:C.orange,fontSize:22,fontWeight:800, 
                       padding:"10px 14px",textAlign:"right"}}/> 
                     <div style={{fontSize:10,color:C.muted,marginTop:4}}> 
-                      Current tariff: E£{inp.tariffNow}/kWh · Set in Financial inputs 
+                      Current tariff: {cs}{inp.tariffNow}/kWh · Set in Financial inputs
                     </div> 
                   </div> 
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}> 
@@ -2205,8 +2209,8 @@ export default function App() {
             NPV @ {inp.discountRate||12}% discount: <strong style={{color:r.npvAtRate>=0?"#10b981":"#ef4444"}}> 
               {fmtE(r.npvAtRate)} 
             </strong> 
-            {" · "}LCOE: <strong style={{color:"#f59e0b"}}>E£{r.lcoe}/kWh</strong> 
-            {" · "}Grid tariff today: <strong style={{color:"#e2e8f0"}}>E£{inp.tariffNow}/kWh</strong> 
+            {" · "}LCOE: <strong style={{color:"#f59e0b"}}>{cs}{r.lcoe}/kWh</strong>
+            {" · "}Grid tariff today: <strong style={{color:"#e2e8f0"}}>{cs}{inp.tariffNow}/kWh</strong>
             {r.lcoe && inp.tariffNow && ( 
               <span style={{color:parseFloat(r.lcoe)<inp.tariffNow?"#10b981":"#ef4444"}}> 
                 {" "}({parseFloat(r.lcoe)<inp.tariffNow?"✓ below grid tariff":"above grid tariff"}) 
@@ -2742,7 +2746,8 @@ for
             </tbody>
           </table>
           <div style={{marginTop:8,fontSize:10,color:C.muted}}>
-            {note}. Egypt Ng=2.0 fl/km²/yr (IEC 62305-2 Annex A).
+            {note}. Site Ng={(inp.ng??2.0).toFixed(1)} fl/km²/yr (IEC 62305-2 Annex A
+            {COUNTRY_DATA[inp.countryCode] ? ` · ${COUNTRY_DATA[inp.countryCode].name}` : ""}).
             Coordinate with MEP engineer for Type 1 Class I surge arrester installation.
           </div>
         </div>
@@ -2767,8 +2772,8 @@ for
                 ["MLPE recovery efficiency", "75% (NREL Deline 2013)"],
                 ["Extra yield recovered", extraYieldPct + "%"],
                 ["Optimizer cost", "EGP " + costEGP.toLocaleString()],
-                ["Discounted extra savings NPV", "EGP " + deltaNPV.toLocaleString()],
-                ["Net benefit (NPV − cost)", "EGP " + netBenefit.toLocaleString()],
+                ["Discounted extra savings NPV", cs + deltaNPV.toLocaleString()],
+                ["Net benefit (NPV − cost)", cs + netBenefit.toLocaleString()],
                 ["Payback on optimizer", paybackYr ? paybackYr + " yrs" : ">25 yrs"],
                 ["Recommendation", worthIt ? "Worth it — positive NPV" : "Marginal — only if shade is significant"],
               ].map(([l,v],i) => (
@@ -2782,7 +2787,7 @@ for
           </table>
           <div style={{marginTop:6,fontSize:10,color:C.muted}}>
             Adjust shading loss fraction in Other Inputs. Optimizer cost:{" "}
-            ${inp.costPerOptimizerUSD||30}/panel at EGP {inp.usdRate||55}/USD.
+            ${inp.costPerOptimizerUSD||30}/panel at {cs}{inp.usdRate||55}/USD.
           </div>
         </div>
       </div>
@@ -2843,7 +2848,7 @@ for
                       <td style={{padding:"7px 10px",textAlign:"right"}}> 
                         <Bar val={d.costPerVilla/1000} max={Math.max(...optData.map(x=>x.costPerVilla/1000))} color={C.red} width={50}/> 
                       </td> 
-                      <td style={{padding:"7px 10px",textAlign:"right",color:C.red,fontWeight:600}}>E£{(d.cost3Villa/1000).toFixed(0)}K</td> 
+                      <td style={{padding:"7px 10px",textAlign:"right",color:C.red,fontWeight:600}}>{cs}{(d.cost3Villa/1000).toFixed(0)}K</td>
                       <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700, 
                         color:d.payback<=8?C.green:d.payback<=12?C.yellow:C.red}}> 
                         {d.payback===26?">25":d.payback} yrs 
@@ -2852,7 +2857,7 @@ for
                       <td style={{padding:"7px 10px",textAlign:"right"}}> 
                         <Bar val={d.netGain/1000} max={maxGain/1000} color={C.green} width={45}/> 
                       </td> 
-                      <td style={{padding:"7px 10px",textAlign:"right",color:C.green,fontWeight:600}}>E£{(d.netGain3/1000).toFixed(0)}K</td> 
+                      <td style={{padding:"7px 10px",textAlign:"right",color:C.green,fontWeight:600}}>{cs}{(d.netGain3/1000).toFixed(0)}K</td>
                     </tr> 
                   ); 
                 })} 
@@ -2884,13 +2889,18 @@ for
             </button> 
           ))} 
         </div>
-        {inp.tariffMode==="tiered" && ( 
-          <div style={{padding:"8px 14px",background:"#14b8a618",borderRadius:8,marginBottom:10, 
-            fontSize:11,color:"#14b8a6",borderLeft:"3px solid #14b8a6"}}> 
-            Tiered savings: displaced kWh valued at highest EgyptERA blocks first. 
-            Rates: 0–50: E£0.68 · 51–100: E£0.78 · 101–200: E£0.95 · 201–350: E£1.55 · 351–650: E£1.95 · 651–1000: E£2.10 · 1000+: E£2.58/kWh 
-          </div> 
-        )} 
+        {inp.tariffMode==="tiered" && (() => {
+          const tiers = inp.tariffTiers || EGYPT_TARIFF_TIERS;
+          return (
+            <div style={{padding:"8px 14px",background:"#14b8a618",borderRadius:8,marginBottom:10,
+              fontSize:11,color:"#14b8a6",borderLeft:"3px solid #14b8a6"}}>
+              Tiered savings: displaced kWh valued at highest blocks first.{" "}
+              {tiers.map((t,i) => (
+                <span key={i}>{i>0?" · ":""}{t.label.replace(/\(.*\)/,"").trim()}: {cs}{t.rate}</span>
+              ))}
+            </div>
+          );
+        })()}
         {inp.tariffEsc===0 && inp.omEsc>0 && ( 
           <div style={{padding:"8px 14px",background:`${C.red}18`,borderRadius:8,marginBottom:10, 
             fontSize:11,color:C.red,borderLeft:`3px solid ${C.red}`}}> 
@@ -2929,13 +2939,17 @@ for
           </div>
           {inp.netMeteringEnabled && (
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:10,color:C.muted}}>Export rate (EGP/kWh):</span>
+              <span style={{fontSize:10,color:C.muted}}>Export rate ({inp.currency||"EGP"}/kWh):</span>
               <input type="number" min="0" max="5" step="0.05"
                 value={inp.netMeteringRate||0.50}
                 onChange={e=>upd("netMeteringRate",parseFloat(e.target.value)||0.50)}
                 style={{width:70,background:C.card,border:`1px solid ${C.green}`,
                   borderRadius:6,color:C.green,fontSize:12,padding:"4px 6px",textAlign:"right"}}/>
-              <span style={{fontSize:9,color:C.muted}}>Egypt net metering: 0.40–0.55 EGP/kWh typical</span>
+              <span style={{fontSize:9,color:C.muted}}>
+                {COUNTRY_DATA[inp.countryCode]?.netMeteringEnabled
+                  ? `Typical: ${cs}${COUNTRY_DATA[inp.countryCode].netMeteringRate}/kWh`
+                  : "Check local utility net metering policy"}
+              </span>
             </div>
           )}
         </div>
@@ -3050,7 +3064,7 @@ for
             {l:"Payback",       v:r.pb?`${r.pb} yrs`:">25", s:"Cash payback",c:C.accent}, 
             {l:"IRR",           v:`${r.irr}%`,         s:"25-year",          c:C.green }, 
             {l:"NPV",           v:fmtE(r.npvAtRate),   s:`@ ${inp.discountRate||12}% discount`,c:r.npvAtRate>=0?C.green:C.red}, 
-            {l:"LCOE",          v:`E£${r.lcoe}/kWh`,   s:"Levelised cost",   c:C.yellow}, 
+            {l:"LCOE",          v:`${cs}${r.lcoe}/kWh`, s:"Levelised cost",  c:C.yellow},
             {l:"25yr net gain", v:fmtE(r.netGain),     s:fmtU(r.netGain),   c:C.green }, 
             {l:"ROI",           v:`${r.roi}%`,          s:"25-year",          c:C.purple}].map(k=>( 
             <div key={k.l} style={{background:C.card,borderRadius:10,padding:"12px 14px",borderLeft:`4px solid ${k.c}`}}> 
@@ -3062,8 +3076,7 @@ for
           ))} 
         </div> 
         <div style={cardS(C.green)}> 
-          <div style={{padding:"10px 14px",color:"white",fontWeight:800}}>25-Year Cashflow 
-(EGP per villa)</div> 
+          <div style={{padding:"10px 14px",color:"white",fontWeight:800}}>25-Year Cashflow ({inp.currency||"EGP"} per villa)</div>
           <div style={{overflowX:"auto"}}> 
             <table style={{...tbl,fontSize:11}}> 
 
@@ -3127,7 +3140,7 @@ for
           {l:"Ground area (m²)",k:"groundAreaM2",s:10,note:"For hybrid/ground mount — set in Coverage tab"}, 
           {l:"No. of villas",k:"nVillas",s:1}, 
           {l:"MDB busbar (A)",k:"mdbBusbarA",s:25}, 
-          {l:"Monthly bill (EGP)",k:"monthlyBillEGP",s:500}, 
+          {l:`Monthly bill (${inp.currency||"EGP"})`,k:"monthlyBillEGP",s:500},
         ]}, 
         {title:"AC Loads",color:C.orange,fields:[ 
           {l:"No. AC units",k:"acUnits",s:1},{l:"Avg tonnage (tons)",k:"acTonnage",s:0.5}, 
@@ -3151,17 +3164,17 @@ for
           {l:"Battery–inverter",k:"lenBatteryM",s:1},{l:"Inverter–MDB",k:"lenACM",s:1}, 
         ]}, 
         {title:"Financial",color:C.green,fields:[ 
-          {l:"Current tariff (EGP/kWh)",k:"tariffNow",s:0.05}, 
+          {l:`Current tariff (${inp.currency||"EGP"}/kWh)`,k:"tariffNow",s:0.05},
           {l:"Tariff escalation (%pa)",k:"tariffEsc",s:1}, 
 
-          {l:"Annual O&M/villa (EGP)",k:"omPerYear",s:500}, 
+          {l:`Annual O&M/villa (${inp.currency||"EGP"})`,k:"omPerYear",s:500},
           {l:"O&M escalation (%pa)",k:"omEsc",s:1,note:"3%=CPI-linked (standard), 10%=Egypt inflation"}, 
           {l:"Discount rate (%pa)",k:"discountRate",s:1,note:"For NPV — 12% = typical Egypt project WACC"}, 
           {l:"Panel degradation (%pa)",k:"panelDeg",s:0.05}, 
           {l:"Analysis period (yr)",k:"analysisPeriod",s:1}, 
           {l:"Battery replace yr",k:"batReplaceYear",s:1}, 
           {l:"USD rate" + (usdRateLive ? " (live ✅)" : " (manual)"), k:"usdRate", s:1,
-            note: usdRateLive ? "Auto-updated from open.er-api.com — EGP "+usdRateLive+"/USD" : "Enter current EGP/USD rate"},
+            note: usdRateLive ? `Auto-updated from open.er-api.com — ${inp.currency||"EGP"} ${usdRateLive}/USD` : `Enter current ${inp.currency||"EGP"}/USD rate`},
         ]}, 
       ].map(({title,color,fields})=>( 
         <div key={title} style={cardS(color)}> 

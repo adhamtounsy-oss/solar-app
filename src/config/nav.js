@@ -47,7 +47,9 @@ export const DEF = {
   tAmbMax:42, tAmbMin:5, pshDesign:DESIGN_PSH, tiltDeg:22,
 
   lenStringM:25, lenFeederM:15, lenBatteryM:3, lenACM:20,
-  tariffNow:1.95, tariffEsc:18, tariffMode:"tiered",
+  countryCode:"eg", currency:"EGP", currencySymbol:"E£",
+  tariffNow:1.95, tariffEsc:18, tariffMode:"tiered", tariffTiers:null,
+  ng:2.0,
   omPerYear:3000, omEsc:3, panelDeg:0.65,
   usdRate:55, analysisPeriod:25, batReplaceYear:12,
   yieldMode:"p50",

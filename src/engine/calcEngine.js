@@ -590,7 +590,7 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
         ? Math.min((monthlySCArr[mi] || 0) * deg * yieldFactor, loadMo)
         : Math.min(genMo * scFrac, loadMo);
       if (inp.tariffMode === "tiered") {
-        yearSav += tieredMonthlySaving(loadMo, scMo, escFac);
+        yearSav += tieredMonthlySaving(loadMo, scMo, escFac, inp.tariffTiers);
       } else {
         yearSav += scMo * tariff;
       }
@@ -651,7 +651,7 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
         const loadMo = monthlyLoadKwh[mi] || (annLoadKwh / 12);
         const scMo   = Math.min(genMo2, loadMo);
         if (adjInp.tariffMode === "tiered") {
-          sav2 += tieredMonthlySaving(loadMo, scMo, esc2);
+          sav2 += tieredMonthlySaving(loadMo, scMo, esc2, adjInp.tariffTiers);
         } else {
           sav2 += scMo * adjInp.tariffNow * esc2;
         }
