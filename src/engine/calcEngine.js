@@ -212,8 +212,9 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
              gen: actKwp * mo.psh * mo.days * etaMo * soilF * bifacialMult * invEtaFrac };
   });
   const annGenTMY  = monthlyGen.reduce((s,m)=>s+m.gen, 0);
-  // v4: P90 yield = TMY × 0.92 (8% inter-annual variance, PVGIS Egypt studies)
-  const annGenP90  = annGenTMY * P90_FACTOR;
+  // v4: P90 yield = TMY × p90Factor (country-specific; default 0.92 for Egypt per PVGIS studies)
+  const siteP90    = inp.p90Factor ?? P90_FACTOR;
+  const annGenP90  = annGenTMY * siteP90;
   const annGenFlat = actKwp * inp.pshDesign * 365 * etaSys * invEtaFrac; // legacy (no soiling)
 
   // -- Build demand arrays — single source, billScale applied -----
@@ -417,10 +418,17 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
 
   // --- Costs ---
   const arrayCostEGP = totP * panel.costUSD * panel.wp * inp.usdRate;
-  const invCostEGP   = inverter.costEGP;
-  const batCostEGP   = noBat ? 0 : battery.costEGP;
-  const bos          = actKwp*8000;
-  const engCost      = actKwp*5000;
+  // Normalize inverter/battery costs: prefer costUSD, else treat costEGP as priced at Egypt rate (55)
+  const _EGP_BASE  = 55;
+  const invCostEGP = inverter.costUSD
+    ? inverter.costUSD * inp.usdRate
+    : (inverter.costEGP / _EGP_BASE) * inp.usdRate;
+  const batCostEGP = noBat ? 0
+    : (battery.costUSD
+        ? battery.costUSD * inp.usdRate
+        : (battery.costEGP / _EGP_BASE) * inp.usdRate);
+  const bos          = actKwp * (inp.bosPerKwp ?? 8000);
+  const engCost      = actKwp * (inp.engPerKwp ?? 5000);
   const sysC         = arrayCostEGP+invCostEGP+batCostEGP+bos+engCost;
   const costPerKwp   = sysC/actKwp;
 
@@ -561,8 +569,8 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
   });
   const annLoadKwh = monthlyLoadKwh.reduce((s,v)=>s+v, 0);
 
-  // Yield factor: P90 applies 0.92 derating to generation
-  const yieldFactor = inp.yieldMode === "p90" ? P90_FACTOR : 1.0;
+  // Yield factor: P90 applies country-specific derating to generation
+  const yieldFactor = inp.yieldMode === "p90" ? siteP90 : 1.0;
 
   const scFrac = annSCPct / 100;
   let cum=0, pb=null, totalSav=0;
@@ -601,7 +609,7 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
       }
     });
     const om   = inp.omPerYear * Math.pow(1 + inp.omEsc/100, yr-1);
-    const batR = (!noBat && yr === inp.batReplaceYear) ? battery.costEGP : 0;
+    const batR = (!noBat && yr === inp.batReplaceYear) ? batCostEGP : 0;
     const net  = yearSav - om - batR;
     cum += net;
     if (!pb && cum >= sysC) pb = yr;
@@ -632,7 +640,7 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
   const pvBatR = cfYears.reduce((a,y) => a + (y.bat  / Math.pow(1+discRate, y.yr)), 0);
   const pvKwh  = cfYears.reduce((a,y) => {
     const degLcoe = bilinearDeg(y.yr-1, inp.panelDeg/100);
-    return a + (annGenTMY * degLcoe * (inp.yieldMode==="p90" ? P90_FACTOR : 1))
+    return a + (annGenTMY * degLcoe * (inp.yieldMode==="p90" ? siteP90 : 1))
                / Math.pow(1+discRate, y.yr);
   }, 0);
   // LCOE in EGP/kWh — cost per kWh that makes NPV = 0
@@ -645,7 +653,7 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
     cfYears.forEach(y => {
       const deg2 = Math.pow(1-adjInp.panelDeg/100, y.yr-1);
       const esc2 = Math.pow(1+adjInp.tariffEsc/100, y.yr-1);
-      const genMo2 = annGenTMY * deg2 * (inp.yieldMode==="p90" ? P90_FACTOR : 1) * scFrac / 12;
+      const genMo2 = annGenTMY * deg2 * (inp.yieldMode==="p90" ? siteP90 : 1) * scFrac / 12;
       let sav2 = 0;
       for (let mi=0; mi<12; mi++) {
         const loadMo = monthlyLoadKwh[mi] || (annLoadKwh / 12);
@@ -657,7 +665,7 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
         }
       }
       const om2  = adjInp.omPerYear * Math.pow(1+adjInp.omEsc/100, y.yr-1);
-      cum2 += sav2 - om2 - (!noBat && y.yr===inp.batReplaceYear ? battery.costEGP : 0);
+      cum2 += sav2 - om2 - (!noBat && y.yr===inp.batReplaceYear ? batCostEGP : 0);
     });
     const adjSysC = varKey==="sysCAdj" ? sysC*(1+delta) : sysC;
     return cum2 - adjSysC;

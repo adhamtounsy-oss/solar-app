@@ -51,6 +51,7 @@ export const DEF = {
   tariffNow:1.95, tariffEsc:18, tariffMode:"tiered", tariffTiers:null,
   ng:2.0,
   omPerYear:3000, omEsc:3, panelDeg:0.65,
+  bosPerKwp:8000, engPerKwp:5000, omPerKwpYear:450, p90Factor:0.920,
   usdRate:55, analysisPeriod:25, batReplaceYear:12,
   yieldMode:"p50",
   netMeteringEnabled:false,
