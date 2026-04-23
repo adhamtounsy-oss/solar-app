@@ -2090,8 +2090,8 @@ export default function App() {
                     <div style={{minWidth:719}}>
                       {/* Window band labels */}
                       <div style={{display:"flex",gap:1,marginBottom:3}}>
-                        {[{l:"",c:"#1e293b",n:12},{l:"Morning 06–10h",c:`${C.yellow}30`,n:8},
-                          {l:"Day 10–17h",c:`${C.accent}30`,n:14},{l:"Evening 17–23h",c:`${C.purple}30`,n:12},{l:"",c:"#1e293b",n:2}]
+                        {[{l:"Night 00–06h",c:"#47556930",n:12},{l:"Morning 06–10h",c:`${C.yellow}30`,n:8},
+                          {l:"Day 10–17h",c:`${C.accent}30`,n:14},{l:"Evening 17–23h",c:`${C.purple}30`,n:12},{l:"Night 23–24h",c:"#47556930",n:2}]
                           .map(({l,c,n},i)=>(
                           <div key={i} style={{width:15*n-1,flexShrink:0,background:c,borderRadius:2,padding:"1px 3px",fontSize:8,
                             fontWeight:700,color:C.muted,textAlign:"center",height:14,lineHeight:"12px",
