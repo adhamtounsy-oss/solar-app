@@ -1,5 +1,28 @@
 import { WIN_HRS } from "../constants/index.js";
 
+// 48 half-hour slots: night 0-11, morning 12-19, day 20-33, evening 34-45, night 46-47
+export const PROF_SLOT_WIN = [{start:12,count:8},{start:20,count:14},{start:34,count:12}];
+export const PROF_KEYS_ALL = ["prof_AC","prof_Light","prof_WH","prof_Kitchen","prof_Laundry","prof_Pool","prof_Misc"];
+
+export function slotsFromFractions(fr) {
+  const s = new Array(48).fill(false);
+  PROF_SLOT_WIN.forEach(({start,count},wi) => {
+    const n = Math.round((fr[wi]||0) * count);
+    for (let i = 0; i < n; i++) s[start+i] = true;
+  });
+  return s;
+}
+
+export function fractionsFromSlots(slots) {
+  return PROF_SLOT_WIN.map(({start,count}) =>
+    slots.slice(start, start+count).filter(Boolean).length / count
+  );
+}
+
+export function initAllSlots(inp) {
+  return Object.fromEntries(PROF_KEYS_ALL.map(pk => [pk, slotsFromFractions(inp[pk]||[0,0,0])]));
+}
+
 export function computeLoadProfile(inp, billScale, seasonalAcScale) {
   const bs  = billScale       != null ? billScale       : 1;
   const acs = seasonalAcScale != null ? seasonalAcScale : 1;
