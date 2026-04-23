@@ -15,6 +15,8 @@ import LoadTab from "./tabs/LoadTab.jsx";
 import ProjectsTab from "./tabs/ProjectsTab.jsx";
 import InputsTab from "./tabs/InputsTab.jsx";
 import DashboardTab from "./tabs/DashboardTab.jsx";
+import LibraryTab from "./tabs/LibraryTab.jsx";
+import RecommendTab from "./tabs/RecommendTab.jsx";
 import { passColor, cardS, tbl, SH, Row, Calc, Bar, TblHead } from "./components/ui/primitives.jsx";
 import LocationPickerModal from "./components/LocationPickerModal.jsx";
 import MiniMapPreview from "./components/MiniMapPreview.jsx";
@@ -1178,180 +1180,18 @@ export default function App() {
   }; 
 
   // -- EQUIPMENT LIBRARY TAB -------------------------------- 
-  const renderLibrary=()=>( 
-    <div> 
-      <div style={cardS(C.accent)}> 
-        <div style={{padding:"12px 16px",color:"white",fontWeight:800,fontSize:13}}>📚 Equipment Library — Upload Supplier Data</div> 
-        <div style={{padding:"16px 20px"}}> 
-          <div style={{fontSize:11,color:C.muted,marginBottom:14,lineHeight:1.7}}> 
-            Upload supplier Excel files (.xlsx/.xls). Parser auto-detects <strong style={{color:C.yellow}}>Panel</strong>, 
-            <strong style={{color:C.purple}}> Inverter</strong>, and <strong style={{color:C.blue}}> Battery</strong> sheets 
-            by column headers. Sample data pre-loaded. 
-          </div> 
-          <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}> 
-            <label style={{padding:"10px 20px",background:C.accent,color:C.bg,border:"none", 
-              borderRadius:8,fontWeight:800,fontSize:13,cursor:"pointer",display:"inline-block"}}> 
-              📂 Upload Excel File 
-              <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} 
-                style={{display:"none"}} /> 
-            </label> 
-            <span style={{fontSize:11,color:C.muted}}>Accepts .xlsx / .xls · Multiple sheets · Auto-detects type</span> 
-          </div> 
-          {uploadMsg&&<div style={{marginTop:12,padding:"8px 14px",borderRadius:8,fontSize:12,fontWeight:600, 
-            background:uploadMsg.includes("✅")?"#dcfce7":"#fee2e2", 
-            color:uploadMsg.includes("✅")?"#166534":"#991b1b"}}>{uploadMsg}</div>} 
-        </div> 
-      </div> 
-
-      <div style={cardS(C.orange)}> 
-        <div style={{padding:"12px 16px",color:"white",fontWeight:800,fontSize:13}}>🎛 Component Selection — Active System Design</div> 
-        <div style={{padding:"16px 20px",display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:16}}> 
-          {[ 
-            {lbl:"☀ PV Panel",   sel:selPanel, fn:setSelPanel, lib:panelLib, col:C.yellow, bg:"#1c1800", 
-             fmt:p=>`${p.brand} — ${p.model} (${p.wp}Wp)`, det:p=>[[`Wp`,p.wp],[`Voc`,`${p.voc}V`],[`Vmp`,`${p.vmp}V`],[`Isc`,`${p.isc}A`],[`Imp`,`${p.imp}A`],[`β`,`${p.betaVoc}%/°C`],[`γ`,`${p.gammaPmax}%/°C`],[`NOCT`,`${p.noct}°C`],[`Cost`,`$${p.costUSD}/W`]]}, 
-
- 
- 
-            {lbl:"🔌 Inverter",   sel:selInv,   fn:setSelInv,   lib:invLib,   col:C.purple, bg:"#1a0033", 
-             fmt:x=>`${x.brand} — ${x.model} (${x.acKW}kW)`, 
-             det:x=>[[`AC kW`,x.acKW],[`Vdc Max`,`${x.vdcMax}V`],[`MPPT`,`${x.mpptMin}–${x.mpptMax}V`],[`MPPTs`,x.numMppt],[`Isc/MPPT`,`${x.iscPerMppt}A`],[`Bat V`,`${x.batVoltMin||"—"}–${x.batVoltMax||"—"}V`],[`Bat Chg`,`${x.batChargeKW}kW`],[`η`,`${x.eta}%`],[`Cost`,fmtE(x.costEGP)]]}, 
-            {lbl:"🔋 Battery",    sel:selBat,   fn:setSelBat,   lib:batLib,   col:C.blue,   bg:"#001433", 
-             fmt:x=>`${x.brand} — ${x.model} (${x.kwh}kWh)`, det:x=>[[`kWh`,x.kwh],[`Voltage`,`${x.voltage}V`],[`DoD`,`${x.dod}%`],[`η`,`${x.eta}%`],[`Cycles`,x.cycleLife],[`Type`,x.chemistry],[`Warranty`,`${x.warranty}yr`],[`Cost`,fmtE(x.costEGP)]]}, 
-
-          ].map(({lbl,sel,fn,lib,col,bg,fmt,det})=>{ 
-            const item=lib.find(x=>x.id===sel)||lib[0]; 
-            return( 
-              <div key={lbl}> 
-                <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>{lbl}</div> 
-                <select value={sel} onChange={e=>fn(e.target.value)} 
-                  style={{width:"100%",background:bg,border:`2px solid ${col}`,borderRadius:8, 
-                  color:col,fontSize:12,padding:"8px 10px",cursor:"pointer",fontWeight:700}}> 
-                  {lib.map(p=><option key={p.id} value={p.id}>{fmt(p)}</option>)} 
-                </select> 
-                {item&&( 
-                  <div style={{marginTop:8,background:"#0f172a",borderRadius:8,padding:"10px 12px",fontSize:11}}> 
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"3px 12px"}}> 
-                      {det(item).map(([k,v])=>( 
-                        <div key={k} style={{display:"flex",justifyContent:"space-between"}}> 
-                          <span style={{color:C.muted}}>{k}</span> 
-                          <span style={{color:col,fontWeight:600}}>{v}</span> 
-                        </div> 
-                      ))} 
-                    </div> 
-                    <div style={{marginTop:6,fontSize:9,color:C.muted}}>{item.certifications}</div> 
-                  </div> 
-                )} 
-              </div> 
-            ); 
-          })} 
-        </div> 
-      </div> 
-
-      {r&&( 
-
-             
-             
- 
-        <div style={cardS(r.allOk?C.green:C.red)}> 
-          <div style={{padding:"10px 16px",color:"white",fontWeight:800,fontSize:13, 
-            display:"flex",justifyContent:"space-between",alignItems:"center"}}> 
-            <span>⚙ Compatibility Checks</span> 
-            <span style={{color:r.allOk?C.green:C.red}}> 
-              {r.allOk?"✅ ALL COMPATIBLE":"⚠ INCOMPATIBILITY DETECTED"} 
-            </span> 
-          </div> 
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))"}}> 
-            {[ 
-              {l:"Inverter ≥ peak demand",   v:r.chkInvSize, d:`${r.peakDemandKW.toFixed(1)}kW vs ${inverter?.acKW}kW`}, 
-              {l:`DC/AC ratio (≤${inverter?.dcAcRatio||1.3})`,    v:r.chkDcAc,    d:`${r.dcAc.toFixed(2)} / limit ${inverter?.dcAcRatio||1.3}`}, 
-              {l:"String Vmp ≥ MPPT min",   v:r.chkMpptMin, d:`${r.vmpSum.toFixed(1)}V vs ${inverter?.mpptMin}V`}, 
-              {l:"String Voc ≤ Vdc max",    v:r.chkMpptMax, d:`${r.strVoc.toFixed(1)}V vs ${inverter?.vdcMax}V`}, 
-              {l:"String Isc per MPPT",     v:r.chkIscMppt, d:`${(panel?.isc*r.strPerMppt).toFixed(1)}A vs ${inverter?.iscPerMppt}A`}, 
-              {l:"Battery voltage ↔ inv",   v:r.chkBatVolt, d:`${battery?.voltage}V in ${inverter?.batVoltMin||"—"}–${inverter?.batVoltMax||"—"}V`}, 
-              {l:"Inverter charge power",   v:r.chkBatChg,  d:`${inverter?.batChargeKW}kW avail.`}, 
-              {l:"Battery ≤20% (Circ.3)",   v:r.chkBatRule, d:`${r.batRulePct.toFixed(0)}% of limit`}, 
-              {l:`Inter-row shading (${inp.mountMode==="ground"?"ground":inp.mountMode==="hybrid"?"roof+gnd":"roof"})`,v:r.chkRowShade,d:r.rowShadeOk?`OK — ${r.totalPanelCap} panels fit`:`~${r.interRowLossPct.toFixed(0)}% loss risk`}, 
-            ].map(({l,v,d},i)=>( 
-              <div key={l} style={{padding:"9px 14px",background:i%2===0?"transparent":"#070f1f", 
-                borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between", 
-                alignItems:"center",gap:8}}> 
-                <div> 
-                  <div style={{fontSize:11,color:C.muted}}>{l}</div> 
-                  <div style={{fontSize:10,color:"#475569"}}>{d}</div> 
-                </div> 
-                <span style={{fontSize:11,fontWeight:800,color:passColor(v),padding:"2px 8px", background:`${passColor(v)}18`,borderRadius:6,whiteSpace:"nowrap"}}>{v}</span> 
-
-              </div> 
-            ))} 
-          </div> 
-        </div> 
-      )} 
-
-                  
- 
-      <button onClick={()=>setShowCmp(!showCmp)} 
-        style={{width:"100%",padding:"10px",background:C.card,border:`1px solid ${C.border}`, borderRadius:8,color:C.muted,fontSize:12,fontWeight:700,cursor:"pointer",marginBottom:12}
-
-}> 
-        {showCmp?"▲ Hide":"▼ Show"} Component Comparison View 
-      </button> 
-
-      {showCmp&&( 
-        <div style={cardS(C.purple)}> 
-          <div style={{padding:"10px 16px",color:"white",fontWeight:800,fontSize:13}}>🔍 All Library Components</div> 
-          {[ 
-            {title:"☀ PV Panels",  color:C.yellow, lib:panelLib,  sel:selPanel, fn:setSelPanel, 
-             cols:["","Brand","Model","Wp","Voc","Vmp","Isc","β","γ","$/W","Certs"], row:p=>[p.brand,p.model,p.wp,p.voc,p.vmp,p.isc,p.betaVoc,p.gammaPmax,p.costUSD,p.certifications]}, 
-
-            {title:"🔌 Inverters", color:C.purple, lib:invLib,    sel:selInv,   fn:setSelInv, 
-             cols:["","Brand","Model","AC kW","Vdc","MPPT V","Bat V","Chg kW","η%","EGP"], row:x=>[x.brand,x.model,x.acKW,x.vdcMax,`${x.mpptMin}–${x.mpptMax}`,`${x.batVoltMin||"—"}–${x.batVoltMax||"—"}`,x.batChargeKW,`${x.eta}%`,fmtE(x.costEGP)]}, 
-
-            {title:"🔋 Batteries", color:C.blue,   lib:batLib,    sel:selBat,   fn:setSelBat, 
-             cols:["","Brand","Model","kWh","V","DoD","η%","Cycles","Type","EGP"], row:x=>[x.brand,x.model,x.kwh,`${x.voltage}V`,`${x.dod}%`,`${x.eta}%`,x.cycleLife,x.chemistry,fmtE(x.costEGP)]}, 
-
-          ].map(({title,color,lib,sel,fn,cols,row})=>( 
-            <div key={title}> 
-              <div style={{padding:"10px 16px",fontSize:11,color,fontWeight:700, 
-                textTransform:"uppercase",letterSpacing:1,borderTop:`1px solid ${C.border}`}}>{title}</div> 
-              <div style={{overflowX:"auto"}}> 
-                <table style={{...tbl,fontSize:11}}> 
-                  <thead><tr style={{borderBottom:`2px solid ${C.border}`}}> 
-                    {cols.map(h=><th key={h} style={{padding:"6px 10px",textAlign:"right", 
-                      color:C.muted,fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>)} 
-                  </tr></thead> 
-                  <tbody> 
-                    {lib.map((item,i)=>( 
-                      <tr key={item.id} onClick={()=>fn(item.id)} style={{cursor:"pointer", 
-                        background:item.id===sel?`${color}18`:i%2===0?"transparent":"#070f1f", 
-                        borderLeft:item.id===sel?`3px solid ${color}`:"3px solid transparent"}}> 
-                        <td style={{padding:"6px 8px",textAlign:"center",fontSize:10,color}}> 
-                          {item.id===sel?"●":""} 
-                        </td> 
-                        {row(item).map((v,j)=>( 
-
-        
- 
-             
-             
-             
-                          <td key={j} style={{padding:"6px 10px",textAlign:"right", 
-                            color:item.id===sel?color:C.muted, 
-                            fontSize:j===1?10:11}}> 
-                            {typeof v==="number"?v.toFixed(j>=6?2:1):v} 
-                          </td> 
-                        ))} 
-                      </tr> 
-                    ))} 
-                  </tbody> 
-                </table> 
-              </div> 
-            </div> 
-          ))} 
-          <div style={{padding:"8px 16px",fontSize:10,color:C.muted}}>Click any row to select.</div> 
-        </div> 
-      )} 
-    </div> 
-  ); 
+  const renderLibrary = () => (
+    <LibraryTab
+      r={r} inp={inp}
+      panel={panel} inverter={inverter} battery={battery}
+      selPanel={selPanel} setSelPanel={setSelPanel} panelLib={panelLib}
+      selInv={selInv}     setSelInv={setSelInv}     invLib={invLib}
+      selBat={selBat}     setSelBat={setSelBat}     batLib={batLib}
+      fmtE={fmtE}
+      handleFile={handleFile} uploadMsg={uploadMsg}
+      showCmp={showCmp} setShowCmp={setShowCmp}
+    />
+  );
 
   // -- COVERAGE TAB ----------------------------------------- 
   const renderCoverage=()=>{ 
@@ -2646,211 +2486,17 @@ for
   );
 
   // -- RECOMMENDATIONS (unchanged logic, updated display) ---- 
-  const renderRecommend=()=>{ 
-    const top3=compatibleRecs.slice(0,3); 
-    const noCompat=compatibleRecs.length===0; 
-    const checkLabel={invSizing:"Inv sizing",dcAcRatio:"DC/AC",mpptMin:"MPPT min",mpptMax:"MPPT max", 
-      iscPerMppt:"Isc/MPPT",batVoltage:"Bat voltage",batCharge:"Bat charge",batRule:"Bat rule (Circ.3)", 
-      roofFit:"Roof fit",vdStr:"DC VD",vdAC:"AC VD"}; 
-    return( 
-      <div> 
-        <div style={cardS(C.pink)}> 
-          <div style={{padding:"10px 16px",color:"white",fontWeight:800,fontSize:13}}>🔒 Lock Components</div> 
-
- 
-          <div style={{padding:"14px 16px",fontSize:11,color:C.muted,marginBottom:8,lineHeight:1.6}}> 
-            Lock components already sourced. Engine recommends from <strong style={{color:C.pink}}>unlocked</strong> library entries. 
-          </div> 
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:12,padding:"0 16px 16px"}}> 
-            {[ 
-              {key:"panel",  icon:"☀",label:"PV Panel",  color:C.yellow,sel:selPanel,fn:setSelPanel,lib:panelLib, fmt:p=>`${p.brand} — ${p.model} (${p.wp}Wp)`}, 
-              {key:"inverter",icon:"🔌",label:"Inverter",  color:C.purple,sel:selInv,  fn:setSelInv,  lib:invLib,  fmt:x=>`${x.brand} — ${x.model} (${x.acKW}kW)`}, 
-              {key:"battery",icon:"🔋",label:"Battery",   color:C.blue,  sel:selBat,  fn:setSelBat,  lib:batLib,  fmt:x=>x.id==="B00"?`⚡ ${x.model}`:x.kwh?`${x.brand} — ${x.model} (${x.kwh}kWh)`:x.model}, 
-            ].map(({key,icon,label,color,sel,fn,lib,fmt})=>{ 
-              const isL=locked[key]; 
-              return( 
-                <div key={key} style={{background:"#0f172a",borderRadius:10,padding:14, 
-                  border:`2px solid ${isL?color:C.border}`,transition:"all .15s"}}> 
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}> 
-                    <span style={{fontWeight:800,color:isL?color:C.muted,fontSize:13}}>{icon} 
-{label}</span> 
-                    <button onClick={()=>setLocked(l=>({...l,[key]:!l[key]}))} 
-                      style={{padding:"4px 12px",borderRadius:20,cursor:"pointer",fontSize:11,fontWeight:700, 
-                      border:`1px solid ${isL?color:C.border}`,background:isL?`${color}22`:"transparent", 
-                      color:isL?color:C.muted}}> 
-                      {isL?"🔒 LOCKED":"🔓 Unlocked"} 
-                    </button> 
-                  </div> 
-                  <select value={sel} onChange={e=>fn(e.target.value)} 
-                    style={{width:"100%",background:"#1e293b",border:`1px solid ${isL?color:C.border}`, 
-                    borderRadius:6,color:isL?color:C.muted,fontSize:11,padding:"6px 8px", 
-                    cursor:"pointer",opacity:isL?1:0.6}}> 
-                    {lib.map(x=><option key={x.id} value={x.id}>{fmt(x)}</option>)} 
-                  </select> 
-                  <div style={{marginTop:6,fontSize:10,color:isL?color:C.muted,fontWeight:isL?700:400}}> 
-                    {isL?"✓ Fixed — system designed around this":`Engine tries all ${lib.length} options`} 
-                  </div> 
-                </div> 
-              ); 
-
-            })} 
-          </div> 
-        </div> 
-
-        <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}> 
-          <span style={{fontSize:11,color:C.muted,alignSelf:"center"}}>Rank by:</span> 
-          {[{v:"electrical",l:"⚡ Electrical"},{v:"financial",l:"💰 Financial"},{v:"weighted",l:"🏆 Weighted (default)"}].map(m=>( 
-            <button key={m.v} onClick={()=>setRankMode(m.v)} 
-              style={{padding:"5px 14px",borderRadius:20,border:"none",cursor:"pointer",fontSize:11,fontWeight:700, background:rankMode===m.v?C.pink:C.card,color:rankMode===m.v?C.bg:C.muted}}> 
-
-              {m.l} 
-            </button> 
-          ))} 
-        </div> 
-
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:14}}> 
-          {[{l:"Combinations tested",v:recommendations.length,c:C.accent}, 
-            {l:"Compatible",v:compatibleRecs.length,c:C.green}, 
-            {l:"Rejected",v:rejectedRecs.length,c:C.red}, 
-            {l:"Locked",v:`${Object.values(locked).filter(Boolean).length}/3`,c:C.pink}].map(k=>( 
-            <div key={k.l} style={{background:C.card,borderRadius:10,padding:"12px 14px",borderLeft:`4px solid ${k.c}`}}> 
-              <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:3}
-}>{k.l}</div> 
-              <div style={{fontSize:20,fontWeight:800,color:k.c}}>{k.v}</div> 
-            </div> 
-          ))} 
-        </div> 
-
-        {noCompat&&( 
-          <div style={{padding:"16px 20px",background:`${C.red}18`,borderRadius:10, 
-            borderLeft:`4px solid ${C.red}`,marginBottom:14}}> 
-            <div style={{fontWeight:800,color:C.red,fontSize:14,marginBottom:8}}>⚠ No compatible combination in library</div> 
-            <div style={{fontSize:12,color:C.muted}}>Upload additional supplier data or unlock a component to widen the search.</div> 
-          </div> 
-        )} 
-
-        {top3.length>0&&( 
-          <div style={cardS(C.pink)}> 
-            <div style={{padding:"10px 16px",color:"white",fontWeight:800,fontSize:13}}> 
-
- 
-              
- 
- 
- 
-              🏆 Top {top3.length} Recommendation{top3.length>1?"s":""} 
-            </div> 
-            {top3.map((rec,ri)=>{ 
-              const medals=["🥇","🥈","🥉"]; 
-              const isSel=rec.p.id===selPanel&&rec.inv.id===selInv&&rec.bat.id===selBat; 
-              return( 
-                <div key={ri} style={{margin:"0 12px 12px",background:"#0f172a",borderRadius:10, 
-                  padding:16,border:`2px solid ${ri===0?C.pink:C.border}`,position:"relative"}}> 
-                  {isSel&&<div style={{position:"absolute",top:10,right:14,fontSize:10,color:C.green, 
-                    fontWeight:800,background:`${C.green}22`,padding:"2px 8px",borderRadius:10}}>● ACTIVE</div>} 
-                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexWrap:"wrap"}}> 
-                    <span style={{fontSize:20}}>{medals[ri]}</span> 
-                    <div> 
-                      <div style={{fontWeight:800,color:ri===0?C.pink:C.text,fontSize:13}}>Recommendation #{ri+1}</div> 
-                      <div style={{fontSize:10,color:C.muted}}> 
-                        Score {rec.weighted.toFixed(0)}/100 · Elec {rec.elecScore.toFixed(0)} · 
-{rec.pass}/{Object.keys(rec.checks).length} checks pass 
-                      </div> 
-                    </div> 
-                    <button onClick={()=>{setSelPanel(rec.p.id);setSelInv(rec.inv.id);setSelBat(rec.bat.id);}} 
-                      style={{marginLeft:"auto",padding:"6px 16px",background:C.pink,color:C.bg, 
-                      border:"none",borderRadius:8,fontWeight:800,fontSize:12,cursor:"pointer"}}> 
-                      Apply → 
-                    </button> 
-                  </div> 
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:10,marginBottom:12}}> 
-                    {[{icon:"☀",label:"Panel",  color:C.yellow,name:`${rec.p.brand} ${rec.p.model}`,   specs:`${rec.p.wp}Wp · $${rec.p.costUSD}/W`}, 
-                      {icon:"🔌",label:"Inverter",color:C.purple,name:`${rec.inv.brand} ${rec.inv.model}`,specs:`${rec.inv.acKW}kW · ${fmtE(rec.inv.costEGP)}`}, 
-                      {icon:"🔋",label:"Battery", color:C.blue,  name:`${rec.bat.brand} ${rec.bat.model}`,specs:`${rec.bat.kwh}kWh · ${fmtE(rec.bat.costEGP)}`}].map(({icon,label,color,name,specs})=>( 
-                      <div key={label} style={{background:C.card,borderRadius:8,padding:"10px 12px",borderLeft:`3px solid ${color}`}}> 
-                        <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:4}
-}>{icon} {label}</div> 
-                        <div style={{fontSize:12,fontWeight:700,color,marginBottom:3}}>{name}</div> 
-                        <div style={{fontSize:10,color:C.muted}}>{specs}</div> 
-
-                      </div> 
-                    ))} 
-                  </div> 
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:8,marginBottom:12}}> 
-                    {[{l:"Array",v:`${rec.r.actKwp.toFixed(1)} kWp`,c:C.yellow}, 
-                      {l:"Annual (TMY)",v:`${(rec.r.annGenTMY/1000).toFixed(1)} MWh`,c:C.green}, 
-                      {l:"Cost",v:fmtE(rec.r.sysC),c:C.red}, 
-                      {l:"Payback",v:rec.r.pb?`${rec.r.pb} yrs`:">25",c:C.accent}, 
-                      {l:"IRR",v:`${rec.r.irr}%`,c:C.green}, 
-                      {l:"25yr gain",v:fmtE(rec.r.netGain),c:C.green}].map(k=>( 
-                      <div key={k.l} style={{background:C.card,borderRadius:7,padding:"7px 10px",textAlign:"center"}}> 
-                        <div style={{fontSize:9,color:C.muted,marginBottom:2}}>{k.l}</div> 
-                        <div style={{fontSize:13,fontWeight:800,color:k.c}}>{k.v}</div> 
-                      </div> 
-                    ))} 
-                  </div> 
-                  <div style={{display:"flex",flexWrap:"wrap",gap:5}}> 
-                    {Object.entries(rec.checks).map(([k,v])=>( 
-                      <div key={k} style={{fontSize:9,padding:"2px 7px",borderRadius:8,fontWeight:700, 
-                        background:`${passColor(v)}18`,color:passColor(v),border:`1px solid ${passColor(v)}44`}}> 
-                        {checkLabel[k]||k}: {v} 
-                      </div> 
-                    ))} 
-                  </div> 
-                </div> 
-              ); 
-            })} 
-          </div> 
-        )} 
-
-        {rejectedRecs.length>0&&( 
-          <div style={cardS(C.red)}> 
-            <div style={{padding:"10px 16px",color:"white",fontWeight:800,fontSize:13}}> 
-              ❌ Rejected ({rejectedRecs.length}) — Incompatibility reasons 
-            </div> 
-            <div style={{overflowX:"auto"}}> 
-              <table style={{...tbl,fontSize:11}}> 
-                <thead><tr style={{borderBottom:`2px solid ${C.border}`}}> 
-                  {["Panel","Inverter","Battery","Rejection reasons"].map(h=>( 
-                    <th key={h} style={{padding:"7px 12px",textAlign:"left",color:C.muted,fontWeight:600}}>{h}</th> 
-                  ))} 
-                </tr></thead> 
-
- 
-                <tbody> 
-                  {rejectedRecs.slice(0,20).map((rec,i)=>( 
-                    <tr key={i} style={{background:i%2===0?"transparent":"#070f1f",borderBottom:`1px solid #1e293b`}}> 
-                      <td style={{padding:"6px 12px",color:C.muted,fontSize:10}}>{rec.p.brand} 
-{rec.p.wp}Wp</td> 
-                      <td style={{padding:"6px 12px",color:C.muted,fontSize:10}}>{rec.inv.brand} 
-{rec.inv.acKW}kW</td> 
-                      <td style={{padding:"6px 12px",color:C.muted,fontSize:10}}>{rec.bat.brand} 
-{rec.bat.kwh}kWh</td> 
-                      <td style={{padding:"6px 12px"}}> 
-                        <div style={{display:"flex",flexWrap:"wrap",gap:4}}> 
-                          {rec.rejectReasons.map(reason=>( 
-                            <span key={reason} style={{fontSize:9,padding:"2px 7px",borderRadius:8, 
-                              background:`${C.red}22`,color:C.red,border:`1px solid ${C.red}44`,fontWeight:700}}> 
-                              {reason} 
-                            </span> 
-                          ))} 
-                        </div> 
-                      </td> 
-                    </tr> 
-                  ))} 
-                  {rejectedRecs.length>20&&( 
-                    <tr><td colSpan={4} style={{padding:"8px 12px",color:C.muted,fontSize:10,textAlign:"center"}}> 
-                      + {rejectedRecs.length-20} more rejected combinations 
-                    </td></tr> 
-                  )} 
-                </tbody> 
-              </table> 
-            </div> 
-          </div> 
-        )} 
-      </div> 
-    ); 
-  }; 
+  const renderRecommend = () => (
+    <RecommendTab
+      recommendations={recommendations} compatibleRecs={compatibleRecs} rejectedRecs={rejectedRecs}
+      selPanel={selPanel} setSelPanel={setSelPanel} panelLib={panelLib}
+      selInv={selInv}     setSelInv={setSelInv}     invLib={invLib}
+      selBat={selBat}     setSelBat={setSelBat}     batLib={batLib}
+      locked={locked} setLocked={setLocked}
+      rankMode={rankMode} setRankMode={setRankMode}
+      fmtE={fmtE}
+    />
+  );
 
   // -- 💾 PROJECTS 
 
