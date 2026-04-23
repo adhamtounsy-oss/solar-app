@@ -195,7 +195,22 @@ import { calcEngine, runOpt, bilinearDeg } from "./engine/calcEngine.js";
 
 
 
-// --- Main App 
+// --- Load-profile slot helpers (48 half-hour slots, windows: morn 12-19, day 20-33, eve 34-45) ---
+const PROF_SLOT_WIN = [{start:12,count:8},{start:20,count:14},{start:34,count:12}];
+const PROF_KEYS_ALL = ["prof_AC","prof_Light","prof_WH","prof_Kitchen","prof_Laundry","prof_Pool","prof_Misc"];
+function slotsFromFractions(fr){
+  const s=new Array(48).fill(false);
+  PROF_SLOT_WIN.forEach(({start,count},wi)=>{const n=Math.round((fr[wi]||0)*count);for(let i=0;i<n;i++)s[start+i]=true;});
+  return s;
+}
+function fractionsFromSlots(slots){
+  return PROF_SLOT_WIN.map(({start,count})=>slots.slice(start,start+count).filter(Boolean).length/count);
+}
+function initAllSlots(inp){
+  return Object.fromEntries(PROF_KEYS_ALL.map(pk=>[pk,slotsFromFractions(inp[pk]||[0,0,0])]));
+}
+
+// --- Main App
 
 export default function App() { 
   const [inp,setInp] = useState(() => {
@@ -251,6 +266,8 @@ export default function App() {
   const [usdRateLive,setUsdRateLive] = useState(null);     // live EGP/USD rate
   const [optimNpv,setOptimNpv]       = useState(null);     // optimizer NPV result
   const [spdResult,setSpdResult]     = useState(null);     // SPD sizing result
+  const [loadSlots,setLoadSlots]     = useState(()=>initAllSlots(DEF)); // 48-slot time-of-day selections
+  const loadDragRef  = useRef(null); // {pk, mode:'select'|'deselect', working:{[pk]:bool[]}}
 
   const fileRef       = useRef();
   const pvgisTimerRef = useRef(null);   // debounce auto-PVGIS fetch
@@ -342,7 +359,7 @@ export default function App() {
  
  
  
-      if (state.inp)      setInp(state.inp); 
+      if (state.inp)      { setInp(state.inp); setLoadSlots(initAllSlots(state.inp)); }
       if (state.selPanel) setSelPanel(state.selPanel); 
       if (state.selInv)   setSelInv(state.selInv); 
       if (state.selBat)   setSelBat(state.selBat); 
@@ -462,6 +479,13 @@ export default function App() {
   const battery  = useMemo(() => batLib.find(b => b.id===selBat)    || batLib[0],    [batLib, selBat]);
   const r        = useMemo(() => calcEngine(inp, panel, inverter, battery, pvgisData),
                             [inp, panel, inverter, battery, pvgisData]);
+
+  // -- Clear load-slot drag on global mouseup ---------------------------------
+  useEffect(()=>{
+    const up=()=>{ loadDragRef.current=null; };
+    window.addEventListener('mouseup',up);
+    return ()=>window.removeEventListener('mouseup',up);
+  },[]);
 
   // -- Monte Carlo yield distribution ----------------------------------------
   useEffect(() => {
@@ -1988,19 +2012,9 @@ export default function App() {
           <div style={cardS(C.accent)}>
             <div style={{padding:"10px 16px",color:"white",fontWeight:800,fontSize:13}}>
               ⚡ Appliance Ratings & Time-of-Day Profile
-            </div>
-            {/* Column headers */}
-            <div style={{padding:"6px 16px 4px",display:"grid",
-              gridTemplateColumns:"minmax(180px,1fr) 90px 90px 90px 72px",
-              gap:8,borderBottom:`1px solid ${C.border}`,alignItems:"end"}}>
-              <span style={{fontSize:10,fontWeight:700,color:C.muted}}>Appliance & Rating</span>
-              {[["🌅","Morning","0–4h"],["☀","Day","0–7h"],["🌙","Evening","0–6h"]].map(([ic,l,sub])=>(
-                <div key={l} style={{textAlign:"center"}}>
-                  <div style={{fontSize:10,fontWeight:700,color:C.accent}}>{ic} {l}</div>
-                  <div style={{fontSize:9,color:C.muted}}>{sub}</div>
-                </div>
-              ))}
-              <span style={{fontSize:10,fontWeight:700,color:C.yellow,textAlign:"right"}}>kWh/day</span>
+              <span style={{fontSize:10,fontWeight:400,color:`${C.accent}cc`,marginLeft:10}}>
+                click or drag to select active hours
+              </span>
             </div>
             {[
               {pk:"prof_AC",     icon:"❄", label:"Air Conditioning"},
@@ -2011,108 +2025,132 @@ export default function App() {
               {pk:"prof_Pool",   icon:"🏊", label:"Pool Pump"},
               {pk:"prof_Misc",   icon:"🔌", label:"Miscellaneous"},
             ].map(({pk,icon,label},li)=>{
-              const fr = inp[pk] || [0,0,0];
+              const slots = loadSlots[pk] || new Array(48).fill(false);
+              const fr = fractionsFromSlots(slots);
               const kw = [
                 inp.acUnits*inp.acTonnage*(3.517/(inp.acCOP||3.0)),
                 (inp.lightingAreaM2*8)/1000,
-                inp.whKW,
-                inp.kitchenW/1000,
-                inp.laundryW/1000,
-                inp.poolKW,
-                inp.miscKW,
+                inp.whKW, inp.kitchenW/1000, inp.laundryW/1000, inp.poolKW, inp.miscKW,
               ][li];
               const dailyKwh = fr.reduce((s,f,i)=>s+f*WIN_HRS[i],0)*kw*(inp.loadMethod==="bill"?r.billScale:1);
               const sI = {width:"52px",background:"#0f172a",border:`1px solid ${C.border}`,
                 borderRadius:5,color:C.text,fontSize:11,padding:"3px 6px",textAlign:"right"};
+              const applySlot=(si,nv)=>{
+                const cur=loadDragRef.current?.working?.[pk]||slots;
+                if(cur[si]===nv) return;
+                const next=[...cur]; next[si]=nv;
+                const newAll={...(loadDragRef.current?.working||loadSlots),[pk]:next};
+                if(loadDragRef.current) loadDragRef.current.working=newAll;
+                setLoadSlots(newAll);
+                upd(pk,fractionsFromSlots(next));
+              };
               return(
-                <div key={pk} style={{padding:"10px 16px",borderBottom:`1px solid ${C.border}`,
-                  display:"grid",gridTemplateColumns:"minmax(180px,1fr) 90px 90px 90px 72px",
-                  gap:8,alignItems:"center"}}>
-                  {/* Spec column */}
-                  <div>
-                    <div style={{fontSize:12,fontWeight:700,color:C.text,marginBottom:5}}>{icon} {label}</div>
-                    {li===0&&<>
-                      <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:3}}>
-                        {[{l:"Units",k:"acUnits",s:1,min:1},
-                          {l:"Tons",k:"acTonnage",s:0.5,min:0.5},
-                          {l:"COP",k:"acCOP",s:0.5,min:1}].map(({l,k,s,min})=>(
-                          <div key={k} style={{textAlign:"center"}}>
-                            <div style={{fontSize:8,color:C.muted,marginBottom:2}}>{l}</div>
-                            <input type="number" value={inp[k]} step={s} min={min}
-                              onChange={e=>upd(k,parseFloat(e.target.value)||min)} style={sI}/>
-                          </div>
-                        ))}
-                      </div>
-                      <div style={{display:"flex",gap:4,marginBottom:3}}>
-                        {[{l:"Summer h/day",k:"acHrsSummer",s:0.5},{l:"Winter h/day",k:"acHrsWinter",s:0.5}].map(({l,k,s})=>(
-                          <div key={k} style={{textAlign:"center"}}>
-                            <div style={{fontSize:8,color:C.muted,marginBottom:2}}>{l}</div>
-                            <input type="number" value={inp[k]} step={s} min={0} max={24}
-                              onChange={e=>upd(k,parseFloat(e.target.value)||0)} style={sI}/>
-                          </div>
-                        ))}
-                      </div>
-                      <div style={{fontSize:9,color:C.accent}}>{kw.toFixed(2)} kW total</div>
-                    </>}
-                    {li===1&&<>
-                      <div style={{display:"flex",gap:4,marginBottom:3}}>
-                        <div>
-                          <div style={{fontSize:8,color:C.muted,marginBottom:2}}>Area m²</div>
-                          <input type="number" value={inp.lightingAreaM2} step={10} min={0}
-                            onChange={e=>upd("lightingAreaM2",parseFloat(e.target.value)||0)} style={sI}/>
+                <div key={pk} style={{padding:"10px 16px",borderBottom:`1px solid ${C.border}`}}>
+                  {/* Row 1: spec + kWh/day */}
+                  <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:10,flexWrap:"wrap"}}>
+                    <div style={{flex:"1 1 200px"}}>
+                      <div style={{fontSize:12,fontWeight:700,color:C.text,marginBottom:5}}>{icon} {label}</div>
+                      {li===0&&<>
+                        <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:3}}>
+                          {[{l:"Units",k:"acUnits",s:1,min:1},{l:"Tons",k:"acTonnage",s:0.5,min:0.5},{l:"COP",k:"acCOP",s:0.5,min:1}].map(({l,k,s,min})=>(
+                            <div key={k} style={{textAlign:"center"}}>
+                              <div style={{fontSize:8,color:C.muted,marginBottom:2}}>{l}</div>
+                              <input type="number" value={inp[k]} step={s} min={min} onChange={e=>upd(k,parseFloat(e.target.value)||min)} style={sI}/>
+                            </div>
+                          ))}
                         </div>
-                      </div>
-                      <div style={{fontSize:9,color:C.accent}}>{kw.toFixed(2)} kW (8W/m²)</div>
-                    </>}
-                    {li===2&&<>
-                      <div style={{fontSize:8,color:C.muted,marginBottom:2}}>kW</div>
-                      <input type="number" value={inp.whKW} step={0.5} min={0}
-                        onChange={e=>upd("whKW",parseFloat(e.target.value)||0)} style={sI}/>
-                    </>}
-                    {li===3&&<>
-                      <div style={{fontSize:8,color:C.muted,marginBottom:2}}>Watts</div>
-                      <input type="number" value={inp.kitchenW} step={100} min={0}
-                        onChange={e=>upd("kitchenW",parseFloat(e.target.value)||0)} style={sI}/>
-                      <div style={{fontSize:9,color:C.accent,marginTop:2}}>{kw.toFixed(2)} kW</div>
-                    </>}
-                    {li===4&&<>
-                      <div style={{fontSize:8,color:C.muted,marginBottom:2}}>Watts</div>
-                      <input type="number" value={inp.laundryW} step={100} min={0}
-                        onChange={e=>upd("laundryW",parseFloat(e.target.value)||0)} style={sI}/>
-                      <div style={{fontSize:9,color:C.accent,marginTop:2}}>{kw.toFixed(2)} kW</div>
-                    </>}
-                    {li===5&&<>
-                      <div style={{fontSize:8,color:C.muted,marginBottom:2}}>kW</div>
-                      <input type="number" value={inp.poolKW} step={0.5} min={0}
-                        onChange={e=>upd("poolKW",parseFloat(e.target.value)||0)} style={sI}/>
-                    </>}
-                    {li===6&&<>
-                      <div style={{fontSize:8,color:C.muted,marginBottom:2}}>kW</div>
-                      <input type="number" value={inp.miscKW} step={0.5} min={0}
-                        onChange={e=>upd("miscKW",parseFloat(e.target.value)||0)} style={sI}/>
-                    </>}
+                        <div style={{display:"flex",gap:4,marginBottom:2}}>
+                          {[{l:"Summer h/day",k:"acHrsSummer",s:0.5},{l:"Winter h/day",k:"acHrsWinter",s:0.5}].map(({l,k,s})=>(
+                            <div key={k} style={{textAlign:"center"}}>
+                              <div style={{fontSize:8,color:C.muted,marginBottom:2}}>{l}</div>
+                              <input type="number" value={inp[k]} step={s} min={0} max={24} onChange={e=>upd(k,parseFloat(e.target.value)||0)} style={sI}/>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{fontSize:9,color:C.accent}}>{kw.toFixed(2)} kW total</div>
+                      </>}
+                      {li===1&&<>
+                        <div style={{fontSize:8,color:C.muted,marginBottom:2}}>Area m²</div>
+                        <input type="number" value={inp.lightingAreaM2} step={10} min={0} onChange={e=>upd("lightingAreaM2",parseFloat(e.target.value)||0)} style={sI}/>
+                        <div style={{fontSize:9,color:C.accent,marginTop:2}}>{kw.toFixed(2)} kW (8W/m²)</div>
+                      </>}
+                      {li===2&&<><div style={{fontSize:8,color:C.muted,marginBottom:2}}>kW</div><input type="number" value={inp.whKW} step={0.5} min={0} onChange={e=>upd("whKW",parseFloat(e.target.value)||0)} style={sI}/></>}
+                      {li===3&&<><div style={{fontSize:8,color:C.muted,marginBottom:2}}>Watts</div><input type="number" value={inp.kitchenW} step={100} min={0} onChange={e=>upd("kitchenW",parseFloat(e.target.value)||0)} style={sI}/><div style={{fontSize:9,color:C.accent,marginTop:2}}>{kw.toFixed(2)} kW</div></>}
+                      {li===4&&<><div style={{fontSize:8,color:C.muted,marginBottom:2}}>Watts</div><input type="number" value={inp.laundryW} step={100} min={0} onChange={e=>upd("laundryW",parseFloat(e.target.value)||0)} style={sI}/><div style={{fontSize:9,color:C.accent,marginTop:2}}>{kw.toFixed(2)} kW</div></>}
+                      {li===5&&<><div style={{fontSize:8,color:C.muted,marginBottom:2}}>kW</div><input type="number" value={inp.poolKW} step={0.5} min={0} onChange={e=>upd("poolKW",parseFloat(e.target.value)||0)} style={sI}/></>}
+                      {li===6&&<><div style={{fontSize:8,color:C.muted,marginBottom:2}}>kW</div><input type="number" value={inp.miscKW} step={0.5} min={0} onChange={e=>upd("miscKW",parseFloat(e.target.value)||0)} style={sI}/></>}
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0,paddingTop:4}}>
+                      <div style={{fontSize:18,fontWeight:800,color:C.yellow}}>{dailyKwh.toFixed(1)}</div>
+                      <div style={{fontSize:9,color:C.muted}}>kWh/day</div>
+                    </div>
                   </div>
-                  {/* Hours-per-window inputs */}
-                  {[0,1,2].map(wi=>{
-                    const hrs = +(fr[wi]*WIN_HRS[wi]).toFixed(1);
-                    return(
-                      <div key={wi} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-                        <input type="number" value={hrs} min={0} max={WIN_HRS[wi]} step={0.5}
-                          onChange={e=>{
-                            const h=Math.min(WIN_HRS[wi],Math.max(0,parseFloat(e.target.value)||0));
-                            const nf=[...fr]; nf[wi]=h/WIN_HRS[wi]; upd(pk,nf);
-                          }}
-                          style={{width:"70px",background:"#0f172a",border:`1px solid ${C.accent}55`,
-                            borderRadius:6,color:C.accent,fontSize:14,fontWeight:700,
-                            padding:"6px 8px",textAlign:"right",boxSizing:"border-box"}}/>
-                        <div style={{fontSize:8,color:C.muted}}>of {WIN_HRS[wi]}h</div>
+                  {/* Row 2: 48-slot grid */}
+                  <div style={{overflowX:"auto"}}>
+                    <div style={{minWidth:719}}>
+                      {/* Window band labels */}
+                      <div style={{display:"flex",gap:1,marginBottom:3}}>
+                        {[{l:"",c:"#1e293b",n:12},{l:"Morning 06–10h",c:`${C.yellow}30`,n:8},
+                          {l:"Day 10–17h",c:`${C.accent}30`,n:14},{l:"Evening 17–23h",c:`${C.purple}30`,n:12},{l:"",c:"#1e293b",n:2}]
+                          .map(({l,c,n},i)=>(
+                          <div key={i} style={{flex:n,background:c,borderRadius:2,padding:"1px 3px",fontSize:8,
+                            fontWeight:700,color:C.muted,textAlign:"center",height:14,lineHeight:"12px",
+                            overflow:"hidden",whiteSpace:"nowrap"}}>{l}</div>
+                        ))}
                       </div>
-                    );
-                  })}
-                  {/* Daily total */}
-                  <div style={{textAlign:"right"}}>
-                    <div style={{fontSize:13,fontWeight:700,color:C.yellow}}>{dailyKwh.toFixed(1)}</div>
-                    <div style={{fontSize:8,color:C.muted}}>kWh/day</div>
+                      {/* Slot boxes */}
+                      <div style={{display:"flex",gap:1,userSelect:"none"}}
+                        onTouchMove={e=>{
+                          e.preventDefault();
+                          if(!loadDragRef.current||loadDragRef.current.pk!==pk) return;
+                          const t=e.touches[0];
+                          const el=document.elementFromPoint(t.clientX,t.clientY);
+                          if(!el||el.dataset.pk!==pk) return;
+                          const si=parseInt(el.dataset.slot);
+                          if(!isNaN(si)) applySlot(si, loadDragRef.current.mode==='select');
+                        }}
+                        onTouchEnd={()=>{ if(loadDragRef.current?.pk===pk) loadDragRef.current=null; }}
+                      >
+                        {Array.from({length:48},(_,si)=>{
+                          const active=(slots||[])[si]||false;
+                          const inM=si>=12&&si<20, inD=si>=20&&si<34, inE=si>=34&&si<46;
+                          const bg=active
+                            ?(inM?C.yellow:inD?C.accent:inE?C.purple:"#475569")
+                            :(inM?`${C.yellow}28`:inD?`${C.accent}28`:inE?`${C.purple}28`:"#0f172a");
+                          return(
+                            <div key={si} data-slot={si} data-pk={pk}
+                              style={{width:14,height:20,borderRadius:2,background:bg,cursor:"pointer",flexShrink:0,
+                                boxShadow:active?`0 0 4px ${inM?C.yellow:inD?C.accent:inE?C.purple:"#475569"}60`:undefined}}
+                              onMouseDown={e=>{
+                                e.preventDefault();
+                                const nv=!active;
+                                loadDragRef.current={pk,mode:nv?'select':'deselect',working:{...loadSlots}};
+                                applySlot(si,nv);
+                              }}
+                              onMouseEnter={()=>{
+                                if(!loadDragRef.current||loadDragRef.current.pk!==pk) return;
+                                applySlot(si, loadDragRef.current.mode==='select');
+                              }}
+                              onTouchStart={e=>{
+                                e.preventDefault();
+                                const nv=!active;
+                                loadDragRef.current={pk,mode:nv?'select':'deselect',working:{...loadSlots}};
+                                applySlot(si,nv);
+                              }}
+                            />
+                          );
+                        })}
+                      </div>
+                      {/* Time labels */}
+                      <div style={{position:"relative",height:14,marginTop:3}}>
+                        {[[0,"00:00"],[12,"06:00"],[20,"10:00"],[34,"17:00"],[46,"23:00"]].map(([slot,time])=>(
+                          <div key={slot} style={{position:"absolute",left:`${(slot/48)*100}%`,
+                            fontSize:8,color:C.muted,transform:"translateX(-50%)",whiteSpace:"nowrap"}}>
+                            {time}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
               );
