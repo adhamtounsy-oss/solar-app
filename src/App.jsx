@@ -12,6 +12,9 @@ import { parseSmartMeterCSV, parsePVGISJson, parsePANFile, parseONDFile, fetchPV
 import { runHourlyDispatch } from "./lib/dispatch.js";
 import { computeLoadProfile, seasonalAcScale, computeEtaSys, slotsFromFractions, fractionsFromSlots, initAllSlots } from "./lib/profile.js";
 import LoadTab from "./tabs/LoadTab.jsx";
+import ProjectsTab from "./tabs/ProjectsTab.jsx";
+import InputsTab from "./tabs/InputsTab.jsx";
+import DashboardTab from "./tabs/DashboardTab.jsx";
 import { passColor, cardS, tbl, SH, Row, Calc, Bar, TblHead } from "./components/ui/primitives.jsx";
 import LocationPickerModal from "./components/LocationPickerModal.jsx";
 import MiniMapPreview from "./components/MiniMapPreview.jsx";
@@ -1630,98 +1633,9 @@ export default function App() {
   );}; 
 
   // -- DASHBOARD -------------------------------------------- 
-  const renderDashboard=()=>{ 
-    if(!r)return<div style={{color:C.muted,padding:20}}>Select components first.</div>; 
-    const kpis=[ 
-      {l:"Selected panel",    v:`${panel?.brand} ${panel?.wp}Wp`,                    c:C.yellow}, 
-      {l:"Selected inverter", v:`${inverter?.brand} ${inverter?.acKW}kW`,            c:C.purple}, 
-      {l:"Selected battery",  v:`${battery?.brand} ${battery?.kwh}kWh`,             c:C.blue  }, 
-      {l:"Array per villa",   v:`${r.actKwp.toFixed(1)} kWp (${r.totP} panels)`,    c:C.yellow}, 
-      {l:"Coverage",          v:r.roofCapped?`${r.coverageActual.toFixed(0)}% (roof-ltd)`:`${r.effPct.toFixed(0)}% offset`, c:r.roofCapped?C.red:C.orange}, 
-      {l:r.tmySource==="pvgis"?`Annual yield ${inp.yieldMode==="p90"?"P90 ":""}(PVGIS ✓)`:`Annual yield ${inp.yieldMode==="p90"?"P90 ":""}(fallback)`,v:`${(yGen/1000).toFixed(2)} MWh/villa`,c:r.tmySource==="pvgis"?C.green:C.yellow}, 
-      {l:r.tmySource==="pvgis"?"SC rate (simulated)":"SC rate (approx)",v:`${r.annSCPct!=null?r.annSCPct.toFixed(1):r.profileSCPct.toFixed(1)}%`,c:r.tmySource==="pvgis"?C.green:C.yellow}, 
-      {l:"Cost per villa",    v:fmtE(r.sysC),                                       c:C.red   }, 
-      {l:"3-villa total",     v:fmtE(r.totalSysC3),                                 c:C.red   }, 
-      {l:"Payback",           v:r.pb?`${r.pb} yrs`:">25",                           c:C.accent}, 
-      {l:"IRR / ROI",         v:`${r.irr}% / ${r.roi}%`,                            c:C.green }, 
-      {l:"25yr net gain/villa", v:fmtE(r.netGain),                                  c:C.green }, 
-      {l:`NPV @${inp.discountRate||12}% discount`, v:fmtE(r.npvAtRate),             c:r.npvAtRate>=0?C.green:C.red}, 
-      {l:"LCOE",                v:`${cs}${r.lcoe}/kWh`,                             c:C.yellow},
-      {l:"Specific yield (P50)", v:`${(r.annGenTMY/r.actKwp).toFixed(0)} kWh/kWp`, c:C.accent},
-      {l:"Specific yield (P90)", v:`${(r.annGenP90/r.actKwp).toFixed(0)} kWh/kWp`, c:C.yellow},
-      {l:"Performance Ratio",   v:r.perfRatio||"—",                                 c:C.accent},
-      {l:"Clipping loss",       v:`${(r.clippingPct||0).toFixed(1)}%`,             c:(r.clippingPct||0)>3?C.orange:C.green},
-    ]; 
-    const checks=[
-      {l:"Inverter sizing",   v:r.chkInvSize},{l:"DC/AC ratio",    v:r.chkDcAc   },
-      {l:"MPPT min",          v:r.chkMpptMin},{l:"MPPT max",       v:r.chkMpptMax},
-      {l:"Isc per MPPT",      v:r.chkIscMppt},{l:"String VD",      v:r.chkVdStr  },
-      {l:"Feeder VD",         v:r.chkVdFdr  },{l:"AC cable VD",    v:r.chkVdAC   },
-      {l:"MDB busbar",        v:r.mdbCheck  },{l:"<500kW NCEDC",   v:r.chkSize500},
-      {l:"Roof fit",          v:r.roofFit?"PASS":"REVIEW"},
-      {l:"Inter-row shading", v:r.chkRowShade},
-      ...(r.noBat ? [] : [
-        {l:"Battery voltage",  v:r.chkBatVolt},
-        {l:"Battery charge",   v:r.chkBatChg },
-        {l:"Battery Circ.3",   v:r.chkBatRule},
-      ]),
-    ];
-    const allPass=checks.every(c=>c.v==="PASS"); 
-    return( 
-      <div> 
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:14}}> 
-          {kpis.map(k=>( 
-
- 
-            <div key={k.l} style={{background:C.card,borderRadius:10,padding:"12px 14px",borderLeft:`4px solid ${k.c}`}}> 
-              <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:3}
-}>{k.l}</div> 
-              <div style={{fontSize:15,fontWeight:800,color:k.c}}>{k.v}</div> 
-            </div> 
-          ))} 
-        </div> 
-        <div style={cardS(allPass?C.green:C.yellow)}> 
-          <div style={{padding:"10px 14px",fontWeight:800,color:"white",display:"flex",justifyContent:"space-between"}}> 
-            <span>Compliance Checks</span> 
-            <span style={{color:allPass?C.green:C.yellow}}>{allPass?"✅ ALL PASS":"⚠ REVIEW"}</span> 
-          </div> 
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))"}}> 
-            {checks.map((c,i)=>( 
-              <div key={c.l} style={{display:"flex",justifyContent:"space-between",alignItems:"center", 
-                padding:"7px 14px",background:i%2===0?"transparent":"#070f1f", 
-                borderBottom:`1px solid ${C.border}`}}> 
-                <span style={{fontSize:11,color:C.muted}}>{c.l}</span> 
-                <span style={{fontSize:11,fontWeight:700,color:passColor(c.v),padding:"2px 8px", 
-                  background:`${passColor(c.v)}18`,borderRadius:6}}>{c.v}</span> 
-              </div> 
-            ))} 
-          </div> 
-        </div> 
-        <div style={cardS(C.red)}> 
-          <div style={{padding:"10px 14px",color:"white",fontWeight:800}}>Cost Breakdown (per villa)</div> 
-          <div style={{padding:"12px 16px",display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:8}}> 
-            {[ 
-              {l:"PV Array",    v:fmtE(r.arrayCostEGP), pct:r.arrayCostEGP/r.sysC*100, c:C.yellow}, 
-              {l:"Inverter",    v:fmtE(r.invCostEGP),   pct:r.invCostEGP/r.sysC*100,   c:C.purple}, 
-              {l:"Battery",     v:fmtE(r.batCostEGP),   pct:r.batCostEGP/r.sysC*100,   c:C.blue  }, 
-              {l:"BoS/Install", v:fmtE(r.bos),          pct:r.bos/r.sysC*100,          c:C.orange}, 
-              {l:"Engineering", v:fmtE(r.engCost),      pct:r.engCost/r.sysC*100,      c:C.muted }, 
-            ].map(k=>( 
-              <div key={k.l} style={{background:"#0f172a",borderRadius:8,padding:"10px 12px"}}> 
-                <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",marginBottom:4}}>{k.l}</div> 
-                <div style={{fontSize:15,fontWeight:800,color:k.c}}>{k.v}</div> 
-
-                <div style={{marginTop:5,background:C.border,borderRadius:4,height:5}}> 
-                  <div style={{width:`${k.pct}%`,background:k.c,borderRadius:4,height:5}}/> 
-                </div> 
-                <div style={{fontSize:10,color:k.c,marginTop:3}}>{k.pct.toFixed(0)}%</div> 
-              </div> 
-            ))} 
-          </div> 
-        </div> 
-      </div> 
-    ); 
-  }; 
+  const renderDashboard = () => (
+    <DashboardTab r={r} inp={inp} panel={panel} inverter={inverter} battery={battery} cs={cs} yGen={yGen} fmtE={fmtE} />
+  );
 
   // -- PHASE TABS -------------------------------------------- 
   const renderLoad=()=>(
@@ -2727,72 +2641,9 @@ for
     ); 
   }; 
 
-  const renderInputs=()=>( 
-    <div> 
-
- 
-      <div style={{padding:"10px 14px",background:`${C.yellow}18`,borderRadius:8,marginBottom:12, 
-        fontSize:11,color:C.yellow,borderLeft:`3px solid ${C.yellow}`}}> 
-        🟡 Component specs set in <strong>📚 Equipment Library</strong>. 
-        Design PSH is <strong>locked to December TMY ({DESIGN_PSH}h)</strong> — always sized for worst month. 
-        Appliance ratings and load fractions set in <strong>⚡ Load</strong> tab.
-      </div> 
-      {[ 
-        {title:"Site & Supply",color:C.blue,fields:[ 
-          {l:"Roof area (m²)",k:"roofAreaM2",s:10}, 
-          {l:"Obstructions (m²)",k:"roofObstructionsM2",s:5}, 
-          {l:"Latitude (°N)",k:"lat",s:0.01,note:"Used for PVGIS fetch"}, 
-          {l:"Longitude (°E)",k:"lon",s:0.01,note:"Used for PVGIS fetch"}, 
-          {l:"Panel azimuth",k:"azimuth",s:5,note:"0=South, -90=East, +90=West"}, 
-          {l:"Roof depth N–S (m)",k:"roofDepthM",s:1,note:"Used for inter-row shading calculation"}, 
-          {l:"Ground area (m²)",k:"groundAreaM2",s:10,note:"For hybrid/ground mount — set in Coverage tab"}, 
-          {l:"No. of villas",k:"nVillas",s:1}, 
-          {l:"MDB busbar (A)",k:"mdbBusbarA",s:25}, 
-          {l:`Monthly bill (${inp.currency||"EGP"})`,k:"monthlyBillEGP",s:500},
-        ]}, 
-        {title:"Site Conditions",color:C.red,fields:[
-          {l:"Max ambient °C",k:"tAmbMax",s:1,note:inp.elevationM!=null&&inp.elevationM!==74?`Site elev. ${Math.round(inp.elevationM)}m — lapse-rate applied in TMY fallback`:""},
-          {l:"Min ambient °C",k:"tAmbMin",s:1},
-          {l:"Tilt angle (°)",k:"tiltDeg",s:1,note:"Affects TMY yield and row spacing"},
-          ...((r?.noBat ?? battery?.kwh===0) ? [] : [{l:"Backup hours",k:"backupHours",s:1}]),
-        ]},
-        {title:"Cable Lengths (m)",color:C.red,fields:[ 
-          {l:"DC string run",k:"lenStringM",s:1},{l:"DC feeder run",k:"lenFeederM",s:1}, 
-          {l:"Battery–inverter",k:"lenBatteryM",s:1},{l:"Inverter–MDB",k:"lenACM",s:1}, 
-        ]}, 
-        {title:"Financial",color:C.green,fields:[ 
-          {l:`Current tariff (${inp.currency||"EGP"}/kWh)`,k:"tariffNow",s:0.05},
-          {l:"Tariff escalation (%pa)",k:"tariffEsc",s:1}, 
-
-          {l:`Annual O&M/villa (${inp.currency||"EGP"})`,k:"omPerYear",s:500},
-          {l:"O&M escalation (%pa)",k:"omEsc",s:1,note:"3%=CPI-linked (standard), 10%=Egypt inflation"}, 
-          {l:"Discount rate (%pa)",k:"discountRate",s:1,note:"For NPV — 12% = typical Egypt project WACC"}, 
-          {l:"Panel degradation (%pa)",k:"panelDeg",s:0.05}, 
-          {l:"Analysis period (yr)",k:"analysisPeriod",s:1}, 
-          {l:"Battery replace yr",k:"batReplaceYear",s:1}, 
-          {l:"USD rate" + (usdRateLive ? " (live ✅)" : " (manual)"), k:"usdRate", s:1,
-            note: usdRateLive ? `Auto-updated from open.er-api.com — ${inp.currency||"EGP"} ${usdRateLive}/USD` : `Enter current ${inp.currency||"EGP"}/USD rate`},
-        ]}, 
-      ].map(({title,color,fields})=>( 
-        <div key={title} style={cardS(color)}> 
-          <div style={{padding:"10px 14px",color:"white",fontWeight:800,fontSize:13}}>{title}</div> 
-          <table style={tbl}><TblHead label="—" calcCol={color}/><tbody> 
-            {fields.map(({l,k,s,note},i)=>( 
-              <Row key={k} label={l} note={note} shade={i%2===0}> 
-                <td style={{padding:"4px 8px"}}> 
-                  <input type="number" value={inp[k]} step={s} 
-                    onChange={e=>upd(k,parseFloat(e.target.value)||0)} 
-                    style={{width:"100%",background:"#1c1800",border:`1px solid ${C.yellow}44`, 
-                    borderRadius:6,color:C.yellow,fontSize:12,padding:"5px 8px",textAlign:"right"}}/> 
-                </td> 
-                <td style={{padding:"6px 12px",color:"#334155",fontSize:11,textAlign:"right",fontStyle:"italic"}}>—</td> 
-              </Row> 
-            ))} 
-          </tbody></table> 
-        </div> 
-      ))} 
-    </div> 
-  ); 
+  const renderInputs = () => (
+    <InputsTab inp={inp} upd={upd} r={r} usdRateLive={usdRateLive} />
+  );
 
   // -- RECOMMENDATIONS (unchanged logic, updated display) ---- 
   const renderRecommend=()=>{ 
@@ -3003,91 +2854,11 @@ for
 
   // -- 💾 PROJECTS 
 
-  const renderProjects = () => { 
-    return ( 
-      <div> 
-        <div style={cardS("#14b8a6")}> 
-          <div style={{padding:"12px 16px",color:"white",fontWeight:800,fontSize:13}}> 
-            Project Save / Load 
-          </div> 
-          <div style={{padding:"16px 20px"}}> 
-
- 
-            <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:12,flexWrap:"wrap"}}> 
-              <input value={projName} onChange={e => setProjName(e.target.value)} 
-                style={{flex:1,minWidth:160,background:"#0f172a",border:"2px solid #14b8a6", 
-                borderRadius:8,color:"#14b8a6",fontSize:14,fontWeight:700,padding:"7px 12px"}} /> 
-              <button onClick={handleSaveProject} 
-                style={{padding:"8px 20px",background:"#14b8a6",color:C.bg,border:"none", 
-                borderRadius:8,fontWeight:800,fontSize:13,cursor:"pointer"}}> 
-                Save Design 
-              </button> 
-            </div> 
-            {saveStatus && ( 
-              <div style={{padding:"7px 12px",borderRadius:6,fontSize:12,fontWeight:600,marginBottom:10, 
-                background:"#10b98120",color:C.green,borderLeft:"3px solid " + C.green}}> 
-                {saveStatus} 
-              </div> 
-            )} 
-            <div style={{fontSize:11,color:C.muted,marginBottom:12}}> 
-              Projects stored in artifact cloud storage — persist across browser sessions. 
-            </div> 
-            {projects.length === 0 
-              ? <div style={{color:C.muted,fontSize:12,padding:16,textAlign:"center"}}>No saved projects yet.</div> 
-              : ( 
-                <div style={{display:"grid",gap:8}}> 
-                  {projects.map(name => ( 
-                    <div key={name} style={{display:"flex",alignItems:"center",gap:10, 
-                      padding:"10px 14px",background:"#0f172a",borderRadius:8, 
-                      border:"1px solid " + C.border}}> 
-                      <span style={{flex:1,color:C.text,fontWeight:600,fontSize:12}}> 
-                        {name} 
-                      </span> 
-                      <button onClick={() => handleLoadProject(name)} 
-                        style={{padding:"4px 12px",background:"#14b8a620",border:"1px solid #14b8a6", borderRadius:6,color:"#14b8a6",fontSize:11,fontWeight:700,cursor:"pointer"}}> 
-
-                        Load 
-                      </button> 
-                      <button onClick={() => handleDeleteProject(name)} 
-                        style={{padding:"4px 10px",background:C.red + "20",border:"1px solid " + C.red, 
-                        borderRadius:6,color:C.red,fontSize:11,cursor:"pointer"}}> 
-                        Del 
-                      </button> 
-                    </div> 
-
-                        
-                  ))} 
-                </div> 
-              ) 
-            } 
-          </div> 
-        </div> 
-        <div style={cardS(C.blue)}> 
-          <div style={{padding:"12px 16px",color:"white",fontWeight:800,fontSize:13}}> 
-            Project Details 
-          </div> 
-          <div style={{padding:"16px 20px",display:"grid", 
-            gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12}}> 
-            {[ 
-              {l:"Project Ref",   k:"projectRef"}, 
-              {l:"Client Name",  k:"clientName"}, 
-              {l:"Villa / Unit", k:"villaRef"}, 
-              {l:"Address",      k:"address"}, 
-              {l:"Engineer",     k:"engineer"}, 
-              {l:"Company",      k:"companyName"}, 
-            ].map(({l,k}) => ( 
-              <div key={k}> 
-                <div style={{fontSize:10,color:C.muted,marginBottom:4}}>{l}</div> 
-                <input value={inp[k]||""} onChange={e => upd(k, e.target.value)} 
-                  style={{width:"100%",background:"#0f172a",border:"1px solid " + C.border, 
-                  borderRadius:6,color:C.text,fontSize:12,padding:"7px 10px"}} /> 
-              </div> 
-            ))} 
-          </div> 
-        </div> 
-      </div> 
-    ); 
-  }; 
+  const renderProjects = () => (
+    <ProjectsTab inp={inp} upd={upd} projects={projects} projName={projName} setProjName={setProjName}
+      saveStatus={saveStatus} handleSaveProject={handleSaveProject}
+      handleLoadProject={handleLoadProject} handleDeleteProject={handleDeleteProject} />
+  );
 
   // -- 📐 SLD 
 
