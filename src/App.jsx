@@ -849,9 +849,7 @@ export default function App() {
             {l:"Self-consumption",  v:`${r.annSCPct!=null?r.annSCPct.toFixed(1):r.profileSCPct.toFixed(1)}%`, c:C.green}, 
             {l:"Grid import/yr",    v:isHourly?`${(r.dispatch.totalGridKwh/1000).toFixed(1)} MWh`:"—", c:C.blue}, 
             {l:"Export/yr",         v:isHourly?`${(r.dispatch.totalExportKwh/1000).toFixed(1)} MWh`:"—", c:C.muted}, 
-            {l:"Bat cycles/yr",     v:isHourly?r.batCyclesYear.toFixed(0):"—",         c:C.purple}, 
-            {l:"Design PSH (Dec)",  v:`${DESIGN_PSH}h/day`,                            c:C.accent}, 
-            {l:"Best month",        v:`${bestMo.m} · ${bestMo.gen.toFixed(0)} kWh`,    c:C.green}, 
+            {l:"Bat cycles/yr",     v:isHourly?r.batCyclesYear.toFixed(0):"—",         c:C.purple},
           ].map(k=>( 
             <div key={k.l} style={{background:C.card,borderRadius:10,padding:"12px 14px",borderLeft:`4px solid ${k.c}`}}> 
               <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:3}
@@ -909,140 +907,100 @@ export default function App() {
           </div> 
         </div> 
 
-        {/* -- Monthly dispatch table (hourly mode only) -- */} 
-        {isHourly&&( 
-          <div style={cardS(C.green)}> 
-            <div style={{padding:"10px 16px",color:"white",fontWeight:800,fontSize:13}}> 
-              📋 Monthly Energy Balance — Hourly Dispatch Simulation 
-            </div> 
-            <div style={{overflowX:"auto"}}> 
-
-                      
-              
- 
-              <table style={{...tbl,fontSize:11}}> 
-                <thead><tr style={{borderBottom:`2px solid ${C.border}`}}> 
-                  {["Month","Gen kWh","Self-consumed","Grid import","Exported","Soiling","SC%"].map(h=>( 
-                    <th key={h} style={{padding:"7px 12px",textAlign:"right",color:C.muted,fontWeight:600}}>{h}</th> 
-                  ))} 
-                </tr></thead> 
-                <tbody> 
-                  {MNAMES.map((mn,mi)=>{ 
-                    const gen  = r.monthlyGen[mi]?.gen || 0; 
-                    const sc   = r.monthlySCArr?.[mi] || 0; 
-                    const grid = r.monthlyGridArr?.[mi] || 0; 
-                    const exp  = Math.max(0, gen - sc); 
-                    const soil = (CAIRO_SOILING[mi]*100).toFixed(0); 
-                    const scP  = gen>0?(sc/gen*100).toFixed(0):"0"; 
-                    const isW  = mn===worstMo.m; 
-                    return( 
-                      <tr key={mn} style={{background:isW?`${C.orange}15`:mi%2===0?"transparent":"#070f1f", 
-                        borderLeft:isW?`3px solid ${C.orange}`:"3px solid transparent"}}> 
-                        <td style={{padding:"6px 12px",color:isW?C.orange:C.text,fontWeight:isW?700:400}}>{mn}{isW?" ◄":""}</td> 
-                        <td style={{padding:"6px 12px",textAlign:"right",color:C.yellow,fontWeight:600}}>{gen.toFixed(0)}</td> 
-                        <td style={{padding:"6px 12px",textAlign:"right",color:C.green,fontWeight:600}}>{sc.toFixed(0)}</td> 
-                        <td style={{padding:"6px 12px",textAlign:"right",color:C.blue}}>{grid.toFixed(0)}</td> 
-                        <td style={{padding:"6px 12px",textAlign:"right",color:C.muted}}>{exp.toFixed(0)}</td> 
-                        <td style={{padding:"6px 12px",textAlign:"right",color:parseFloat(soil)>5?C.orange:C.muted}}>{soil}%</td> 
-                        <td style={{padding:"6px 12px",textAlign:"right",fontWeight:700, color:parseFloat(scP)>=70?C.green:parseFloat(scP)>=50?C.yellow:C.red}}>{scP}%</td> 
-
-                      </tr> 
-                    ); 
-                  })} 
-                  <tr style={{background:`${C.yellow}12`,borderTop:`2px solid ${C.yellow}`}}> 
-                    <td style={{padding:"8px 12px",color:C.yellow,fontWeight:800}}>ANNUAL</td> 
-                    <td style={{padding:"8px 12px",textAlign:"right",color:C.yellow,fontWeight:800}}>{r.dispatch.totalGenKwh.toFixed(0)}</td> 
-                    <td style={{padding:"8px 12px",textAlign:"right",color:C.green,fontWeight:800}}>{r.dispatch.totalSCKwh.toFixed(0)}</td> 
-
-                          
-                    <td style={{padding:"8px 12px",textAlign:"right",color:C.blue,fontWeight:800}}>{r.dispatch.totalGridKwh.toFixed(0)}</td> 
-                    <td style={{padding:"8px 12px",textAlign:"right",color:C.muted,fontWeight:800}}>{r.dispatch.totalExportKwh.toFixed(0)}</td> 
-                    <td style={{padding:"8px 12px",textAlign:"right",color:C.muted}}>avg 
-{(CAIRO_SOILING.reduce((a,v)=>a+v,0)/12*100).toFixed(1)}%</td> 
-                    <td style={{padding:"8px 12px",textAlign:"right",fontWeight:800,color:C.green}}>{r.annSCPct.toFixed(1)}%</td> 
-                  </tr> 
-                </tbody> 
-              </table> 
-            </div> 
-          </div> 
-        )} 
-
-        {/* -- Battery dispatch summary -- */} 
-        {isHourly&&( 
-          <div style={cardS(C.purple)}> 
-            <div style={{padding:"10px 16px",color:"white",fontWeight:800,fontSize:13}}>🔋 Battery Dispatch Summary — Simulated</div> 
-            <div style={{padding:"12px 16px",display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:8}}> 
-              {[ 
-                {l:"Annual charged",    v:`${(r.dispatch.totalBatChgKwh/1000).toFixed(1)} MWh`, c:C.green}, 
-                {l:"Annual discharged", v:`${(r.dispatch.totalBatDischKwh/1000).toFixed(1)} MWh`,c:C.blue}, 
-                {l:"Cycles/year",       v:r.dispatch.batCycles.toFixed(0),                      c:C.purple}, 
-                {l:"Dec evening unmet", v:`${r.dispatch.eveningDeficits[11].toFixed(1)} kWh`,   c:r.dispatch.eveningDeficits[11]<5?C.green:C.orange}, 
-                {l:"Jul evening unmet", v:`${r.dispatch.eveningDeficits[6].toFixed(1)} kWh`,    c:r.dispatch.eveningDeficits[6]<5?C.green:C.orange}, 
-                {l:"Battery adequate?", v:Math.max(...r.dispatch.eveningDeficits)<2?"YES ✓":"CHECK ⚠", c:Math.max(...r.dispatch.eveningDeficits)<2?C.green:C.orange}, 
-              ].map(k=>( 
-                <div key={k.l} style={{background:"#0f172a",borderRadius:8,padding:"10px 12px"}}> 
-                  <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",marginBottom:3}}>{k.l}</div> 
-                  <div style={{fontSize:14,fontWeight:800,color:k.c}}>{k.v}</div> 
-                </div> 
-              ))} 
-            </div> 
-            <div style={{padding:"8px 16px 12px",fontSize:10,color:C.muted,lineHeight:1.6}}> 
-              Dispatch logic: surplus charges battery (up to max C-rate), deficit discharges (down to DoD), remainder imports from grid. 
-
- 
-              Cycles = total annual discharge ÷ usable capacity. Unmet evening demand = grid imports 17–22h. 
-            </div> 
-          </div> 
-        )} 
-
-        {/* -- Static TMY table -- */} 
-        <div style={cardS(C.accent)}> 
-          <div style={{padding:"10px 16px",color:"white",fontWeight:800,fontSize:13}}> 
-            {isHourly?"PVGIS Hourly Data — Monthly Summary":"Monthly Irradiance Table — Built-in TMY Fallback"} 
-          </div> 
-          <div style={{overflowX:"auto"}}> 
-            <table style={{...tbl,fontSize:11}}> 
-              <thead><tr style={{borderBottom:`2px solid ${C.border}`}}> 
-                {["Month","PSH h/day","T amb °C","T cell °C","η sys %","Soiling %","Gen kWh","Cumul kWh"].map(h=>( 
-                  <th key={h} style={{padding:"7px 12px",textAlign:"right",color:C.muted,fontWeight:600}}>{h}</th> 
-                ))} 
-              </tr></thead> 
-              <tbody> 
-                {r.monthlyGen.map((mo,mi)=>{ 
-                  const tCell=(mo.tAmb+(panel.noct-20)*0.8); 
-                  const etaMo=computeEtaSys(panel,mo.tAmb); 
-                  const cumul=r.monthlyGen.slice(0,mi+1).reduce((s,m)=>s+m.gen,0); 
-                  const isW=mo.m===worstMo.m; 
-                  return( 
-                    <tr key={mo.m} style={{background:isW?`${C.orange}18`:mi%2===0?"transparent":"#070f1f", 
-                      borderLeft:isW?`3px solid ${C.orange}`:"3px solid transparent"}}> 
-                      <td style={{padding:"6px 12px",color:isW?C.orange:C.text,fontWeight:isW?700:400}}> 
-                        {mo.m}{isW?" ◄ DESIGN":""} 
-                      </td> 
-                      <td style={{padding:"6px 12px",textAlign:"right",color:C.accent,fontWeight:600}}>{mo.psh}</td> 
-                      <td style={{padding:"6px 12px",textAlign:"right",color:C.muted}}>{mo.tAmb}</td> 
-                      <td style={{padding:"6px 12px",textAlign:"right",color:C.muted}}>{tCell.toFixed(1)}</td> 
-                      <td style={{padding:"6px 12px",textAlign:"right",color:C.muted}}>{(etaMo*100).toFixed(1)}</td> 
-                      <td style={{padding:"6px 12px",textAlign:"right", 
-                        color:(CAIRO_SOILING[mi]*100)>5?C.orange:C.muted}}> 
-                        {(CAIRO_SOILING[mi]*100).toFixed(0)} 
-                      </td> 
-
- 
-                      <td style={{padding:"6px 12px",textAlign:"right",color:C.yellow,fontWeight:600}}>{mo.gen.toFixed(0)}</td> 
-                      <td style={{padding:"6px 12px",textAlign:"right",color:C.muted}}>{cumul.toFixed(0)}</td> 
-                    </tr> 
-                  ); 
-                })} 
-                <tr style={{background:`${C.yellow}15`,borderTop:`2px solid ${C.yellow}`}}> 
-                  <td colSpan={6} style={{padding:"8px 12px",color:C.yellow,fontWeight:800}}>ANNUAL TOTAL</td> 
-                  <td style={{padding:"8px 12px",textAlign:"right",color:C.yellow,fontWeight:800}}>{yGen.toFixed(0)}</td>
-                  <td style={{padding:"8px 12px",textAlign:"right",color:C.yellow,fontWeight:800}}>{yGen.toFixed(0)}</td>
-                </tr> 
-              </tbody> 
-            </table> 
-          </div> 
+        {/* -- Unified monthly table -- */}
+        <div style={cardS(C.accent)}>
+          <div style={{padding:"10px 16px",color:"white",fontWeight:800,fontSize:13}}>
+            {isHourly ? "📋 Monthly Energy & Site Summary" : "📋 Monthly Irradiance Table — Built-in TMY Fallback"}
+          </div>
+          <div style={{overflowX:"auto"}}>
+            <table style={{...tbl,fontSize:11}}>
+              <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
+                {[
+                  "Month","Gen kWh",
+                  ...(isHourly?["SC kWh","SC%","Grid kWh","Export kWh"]:[]),
+                  "PSH h/day","T amb °C","T cell °C","η sys %","Soiling %","Cumul kWh"
+                ].map(h=>(
+                  <th key={h} style={{padding:"7px 10px",textAlign:"right",color:C.muted,fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {r.monthlyGen.map((mo,mi)=>{
+                  const sc    = r.monthlySCArr?.[mi] || 0;
+                  const grid  = r.monthlyGridArr?.[mi] || 0;
+                  const exp   = Math.max(0, mo.gen - sc);
+                  const soil  = (CAIRO_SOILING[mi]*100).toFixed(0);
+                  const scP   = mo.gen>0?(sc/mo.gen*100).toFixed(0):"0";
+                  const tCell = (mo.tAmb+(panel.noct-20)*0.8);
+                  const etaMo = computeEtaSys(panel,mo.tAmb);
+                  const cumul = r.monthlyGen.slice(0,mi+1).reduce((s,m)=>s+m.gen,0);
+                  const isW   = mo.m===worstMo.m;
+                  const isB   = mo.m===bestMo.m;
+                  return(
+                    <tr key={mo.m} style={{background:isW?`${C.orange}18`:mi%2===0?"transparent":"#070f1f",
+                      borderLeft:isW?`3px solid ${C.orange}`:isB?`3px solid ${C.green}`:"3px solid transparent"}}>
+                      <td style={{padding:"6px 10px",color:isW?C.orange:isB?C.green:C.text,fontWeight:isW||isB?700:400,whiteSpace:"nowrap"}}>
+                        {mo.m}{isW?" ◄":""}
+                      </td>
+                      <td style={{padding:"6px 10px",textAlign:"right",color:C.yellow,fontWeight:600}}>{mo.gen.toFixed(0)}</td>
+                      {isHourly&&<>
+                        <td style={{padding:"6px 10px",textAlign:"right",color:C.green}}>{sc.toFixed(0)}</td>
+                        <td style={{padding:"6px 10px",textAlign:"right",fontWeight:700,color:parseFloat(scP)>=70?C.green:parseFloat(scP)>=50?C.yellow:C.red}}>{scP}%</td>
+                        <td style={{padding:"6px 10px",textAlign:"right",color:C.blue}}>{grid.toFixed(0)}</td>
+                        <td style={{padding:"6px 10px",textAlign:"right",color:C.muted}}>{exp.toFixed(0)}</td>
+                      </>}
+                      <td style={{padding:"6px 10px",textAlign:"right",color:C.accent,fontWeight:600}}>{mo.psh}</td>
+                      <td style={{padding:"6px 10px",textAlign:"right",color:C.muted}}>{mo.tAmb}</td>
+                      <td style={{padding:"6px 10px",textAlign:"right",color:C.muted}}>{tCell.toFixed(1)}</td>
+                      <td style={{padding:"6px 10px",textAlign:"right",color:C.muted}}>{(etaMo*100).toFixed(1)}</td>
+                      <td style={{padding:"6px 10px",textAlign:"right",color:parseFloat(soil)>5?C.orange:C.muted}}>{soil}%</td>
+                      <td style={{padding:"6px 10px",textAlign:"right",color:C.muted}}>{cumul.toFixed(0)}</td>
+                    </tr>
+                  );
+                })}
+                <tr style={{background:`${C.yellow}15`,borderTop:`2px solid ${C.yellow}`}}>
+                  <td style={{padding:"8px 10px",color:C.yellow,fontWeight:800}}>ANNUAL</td>
+                  <td style={{padding:"8px 10px",textAlign:"right",color:C.yellow,fontWeight:800}}>{yGen.toFixed(0)}</td>
+                  {isHourly&&<>
+                    <td style={{padding:"8px 10px",textAlign:"right",color:C.green,fontWeight:800}}>{r.dispatch.totalSCKwh.toFixed(0)}</td>
+                    <td style={{padding:"8px 10px",textAlign:"right",color:C.green,fontWeight:800}}>{r.annSCPct.toFixed(1)}%</td>
+                    <td style={{padding:"8px 10px",textAlign:"right",color:C.blue,fontWeight:800}}>{r.dispatch.totalGridKwh.toFixed(0)}</td>
+                    <td style={{padding:"8px 10px",textAlign:"right",color:C.muted,fontWeight:800}}>{r.dispatch.totalExportKwh.toFixed(0)}</td>
+                  </>}
+                  <td style={{padding:"8px 10px"}}/>
+                  <td style={{padding:"8px 10px"}}/>
+                  <td style={{padding:"8px 10px"}}/>
+                  <td style={{padding:"8px 10px"}}/>
+                  <td style={{padding:"8px 10px",textAlign:"right",color:C.muted,fontSize:10}}>avg {(CAIRO_SOILING.reduce((a,v)=>a+v,0)/12*100).toFixed(1)}%</td>
+                  <td style={{padding:"8px 10px",textAlign:"right",color:C.yellow,fontWeight:800}}>{yGen.toFixed(0)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div> 
+
+        {/* -- Battery dispatch summary -- */}
+        {isHourly&&(
+          <div style={cardS(C.purple)}>
+            <div style={{padding:"10px 16px",color:"white",fontWeight:800,fontSize:13}}>🔋 Battery Dispatch Summary</div>
+            <div style={{padding:"12px 16px",display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+              {[
+                {l:"Dec evening unmet", v:`${r.dispatch.eveningDeficits[11].toFixed(1)} kWh`, c:r.dispatch.eveningDeficits[11]<5?C.green:C.orange},
+                {l:"Jul evening unmet", v:`${r.dispatch.eveningDeficits[6].toFixed(1)} kWh`,  c:r.dispatch.eveningDeficits[6]<5?C.green:C.orange},
+                {l:"Battery adequate?", v:Math.max(...r.dispatch.eveningDeficits)<2?"YES ✓":"CHECK ⚠", c:Math.max(...r.dispatch.eveningDeficits)<2?C.green:C.orange},
+              ].map(k=>(
+                <div key={k.l} style={{background:"#0f172a",borderRadius:8,padding:"10px 12px"}}>
+                  <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",marginBottom:3}}>{k.l}</div>
+                  <div style={{fontSize:14,fontWeight:800,color:k.c}}>{k.v}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{padding:"6px 16px 12px",fontSize:10,color:C.muted}}>
+              Unmet evening demand = grid imports 17–22h. Cycles and throughput visible in monthly table above.
+            </div>
+          </div>
+        )} 
+
+ 
       </div> 
     ); 
   }; 
@@ -2491,7 +2449,7 @@ export default function App() {
       );
     })() : null;
 
-    return [renderSoilingEditor(), mcEl, nasaEl, sweepEl, waterfallEl, tiltEl, obstacleEl, horizonEl];
+    return [renderSoilingEditor(), mcEl, nasaEl, sweepEl, waterfallEl, sweepEl ? null : tiltEl, obstacleEl, horizonEl];
   } 
 
   const renderP3=()=>{ 

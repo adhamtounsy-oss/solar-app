@@ -6,6 +6,7 @@ export const NAV_GROUPS = [
     { id:"load",     icon:"⚡", label:"Load"           },
     { id:"library",  icon:"📚", label:"Equipment"      },
     { id:"coverage", icon:"🎯", label:"Sizing"         },
+    { id:"inputs",   icon:"📋", label:"Advanced"       },
   ]},
   { id:"design",  label:"Design",  color:C.yellow,  tabs:[
     { id:"solar",    icon:"☀",  label:"Solar Resource" },
@@ -24,7 +25,6 @@ export const NAV_GROUPS = [
     { id:"proposal", icon:"📄", label:"Proposal"       },
     { id:"sld",      icon:"📐", label:"SLD"            },
     { id:"bom",      icon:"📦", label:"BOM"            },
-    { id:"inputs",   icon:"📋", label:"Advanced"       },
   ]},];
 
 export const DEF = {
