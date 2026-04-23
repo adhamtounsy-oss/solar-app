@@ -1785,10 +1785,6 @@ export default function App() {
       }, 
     ]; 
     const method = inp.loadMethod || "profile"; 
-    const profLabels =["AC","Light","WH","Kitchen","Laundry","Pool","Misc"]; 
-    const profIcons  =["❄","💡","🚿","🍳","👗","🏊","🔌"]; 
-    const profKeys   =["prof_AC","prof_Light","prof_WH","prof_Kitchen","prof_Laundry","prof_Pool","prof_Misc"]; 
-    const winLabels  =["Morning 06–10h","Day 10–17h","Evening 17–23h"]; 
     const {demand,solarShape,morningKwh,dayKwh,eveningKwh,totalKwh} = profile; 
     const totalSolarGen = r.actKwp * r.etaSys * inp.pshDesign; 
     const genNorm = solarShape.reduce((s,v)=>s+v,0); 
@@ -1988,49 +1984,139 @@ export default function App() {
             </div> 
           </div> 
 
-          {/* Profile sliders */} 
-          <div style={cardS(C.accent)}> 
-            <div style={{padding:"10px 16px",color:"white",fontWeight:800,fontSize:13}}> 
-              Time-Window Fractions — Fraction of each load active per window 
-            </div> 
-            <div style={{padding:"6px 16px 4px",display:"grid", 
-              gridTemplateColumns:"110px repeat(3,1fr)",gap:8, 
-              borderBottom:`1px solid ${C.border}`}}> 
-              <span/> 
-              {winLabels.map(l=>( 
-                <span key={l} style={{textAlign:"center",fontSize:10,fontWeight:700,color:C.accent}}>{l}</span> 
-              ))} 
-            </div> 
-            {profLabels.map((lbl,li)=>{ 
-              const pk=profKeys[li]; 
-              const fr=inp[pk]; 
-              const _acKW=inp.acUnits*inp.acTonnage*(3.517/(inp.acCOP||3.0)), _lightKW=(inp.lightingAreaM2*8)/1000; 
-              const kw=[_acKW,_lightKW,inp.whKW,inp.kitchenW/1000,inp.laundryW/1000,inp.poolKW,inp.miscKW][li]; 
-              const dailyKwh = fr.reduce((s,f,i)=>s+f*WIN_HRS[i],0)*kw*(inp.loadMethod==="bill"?r.billScale:1); 
-              return( 
-                <div key={lbl} style={{padding:"10px 16px",borderBottom:`1px solid ${C.border}`, 
-                  display:"grid",gridTemplateColumns:"110px repeat(3,1fr)",gap:8,alignItems:"center"}}> 
-                  <div> 
-                    <div style={{fontSize:11,color:C.text,fontWeight:600}}>{profIcons[li]} {lbl}</div> 
-                    <div style={{fontSize:9,color:C.muted,marginTop:2}}>{dailyKwh.toFixed(1)} kWh/day</div> 
-
- 
-                  </div> 
-                  {[0,1,2].map(wi=>( 
-                    <div key={wi} style={{display:"flex",flexDirection:"column",gap:3}}> 
-                      <div style={{display:"flex",justifyContent:"space-between",fontSize:10}}> 
-                        <span style={{color:C.muted}}>0</span> 
-                        <span style={{color:C.accent,fontWeight:800}}>{Math.round(fr[wi]*100)}%</span> 
-                        <span style={{color:C.muted}}>100</span> 
-                      </div> 
-                      <input type="range" min={0} max={1} step={0.05} value={fr[wi]} 
-                        onChange={e=>{const nf=[...fr];nf[wi]=parseFloat(e.target.value);upd(pk,nf);}} 
-                        style={{width:"100%",accentColor:C.accent}}/> 
-                    </div> 
-                  ))} 
-                </div> 
-              ); 
-            })} 
+          {/* Appliance Ratings & Time-of-Day Profile */}
+          <div style={cardS(C.accent)}>
+            <div style={{padding:"10px 16px",color:"white",fontWeight:800,fontSize:13}}>
+              ⚡ Appliance Ratings & Time-of-Day Profile
+            </div>
+            {/* Column headers */}
+            <div style={{padding:"6px 16px 4px",display:"grid",
+              gridTemplateColumns:"minmax(180px,1fr) 90px 90px 90px 72px",
+              gap:8,borderBottom:`1px solid ${C.border}`,alignItems:"end"}}>
+              <span style={{fontSize:10,fontWeight:700,color:C.muted}}>Appliance & Rating</span>
+              {[["🌅","Morning","0–4h"],["☀","Day","0–7h"],["🌙","Evening","0–6h"]].map(([ic,l,sub])=>(
+                <div key={l} style={{textAlign:"center"}}>
+                  <div style={{fontSize:10,fontWeight:700,color:C.accent}}>{ic} {l}</div>
+                  <div style={{fontSize:9,color:C.muted}}>{sub}</div>
+                </div>
+              ))}
+              <span style={{fontSize:10,fontWeight:700,color:C.yellow,textAlign:"right"}}>kWh/day</span>
+            </div>
+            {[
+              {pk:"prof_AC",     icon:"❄", label:"Air Conditioning"},
+              {pk:"prof_Light",  icon:"💡", label:"Lighting"},
+              {pk:"prof_WH",     icon:"🚿", label:"Water Heater"},
+              {pk:"prof_Kitchen",icon:"🍳", label:"Kitchen"},
+              {pk:"prof_Laundry",icon:"👗", label:"Laundry"},
+              {pk:"prof_Pool",   icon:"🏊", label:"Pool Pump"},
+              {pk:"prof_Misc",   icon:"🔌", label:"Miscellaneous"},
+            ].map(({pk,icon,label},li)=>{
+              const fr = inp[pk] || [0,0,0];
+              const kw = [
+                inp.acUnits*inp.acTonnage*(3.517/(inp.acCOP||3.0)),
+                (inp.lightingAreaM2*8)/1000,
+                inp.whKW,
+                inp.kitchenW/1000,
+                inp.laundryW/1000,
+                inp.poolKW,
+                inp.miscKW,
+              ][li];
+              const dailyKwh = fr.reduce((s,f,i)=>s+f*WIN_HRS[i],0)*kw*(inp.loadMethod==="bill"?r.billScale:1);
+              const sI = {width:"52px",background:"#0f172a",border:`1px solid ${C.border}`,
+                borderRadius:5,color:C.text,fontSize:11,padding:"3px 6px",textAlign:"right"};
+              return(
+                <div key={pk} style={{padding:"10px 16px",borderBottom:`1px solid ${C.border}`,
+                  display:"grid",gridTemplateColumns:"minmax(180px,1fr) 90px 90px 90px 72px",
+                  gap:8,alignItems:"center"}}>
+                  {/* Spec column */}
+                  <div>
+                    <div style={{fontSize:12,fontWeight:700,color:C.text,marginBottom:5}}>{icon} {label}</div>
+                    {li===0&&<>
+                      <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:3}}>
+                        {[{l:"Units",k:"acUnits",s:1,min:1},
+                          {l:"Tons",k:"acTonnage",s:0.5,min:0.5},
+                          {l:"COP",k:"acCOP",s:0.5,min:1}].map(({l,k,s,min})=>(
+                          <div key={k} style={{textAlign:"center"}}>
+                            <div style={{fontSize:8,color:C.muted,marginBottom:2}}>{l}</div>
+                            <input type="number" value={inp[k]} step={s} min={min}
+                              onChange={e=>upd(k,parseFloat(e.target.value)||min)} style={sI}/>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{display:"flex",gap:4,marginBottom:3}}>
+                        {[{l:"Summer h/day",k:"acHrsSummer",s:0.5},{l:"Winter h/day",k:"acHrsWinter",s:0.5}].map(({l,k,s})=>(
+                          <div key={k} style={{textAlign:"center"}}>
+                            <div style={{fontSize:8,color:C.muted,marginBottom:2}}>{l}</div>
+                            <input type="number" value={inp[k]} step={s} min={0} max={24}
+                              onChange={e=>upd(k,parseFloat(e.target.value)||0)} style={sI}/>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{fontSize:9,color:C.accent}}>{kw.toFixed(2)} kW total</div>
+                    </>}
+                    {li===1&&<>
+                      <div style={{display:"flex",gap:4,marginBottom:3}}>
+                        <div>
+                          <div style={{fontSize:8,color:C.muted,marginBottom:2}}>Area m²</div>
+                          <input type="number" value={inp.lightingAreaM2} step={10} min={0}
+                            onChange={e=>upd("lightingAreaM2",parseFloat(e.target.value)||0)} style={sI}/>
+                        </div>
+                      </div>
+                      <div style={{fontSize:9,color:C.accent}}>{kw.toFixed(2)} kW (8W/m²)</div>
+                    </>}
+                    {li===2&&<>
+                      <div style={{fontSize:8,color:C.muted,marginBottom:2}}>kW</div>
+                      <input type="number" value={inp.whKW} step={0.5} min={0}
+                        onChange={e=>upd("whKW",parseFloat(e.target.value)||0)} style={sI}/>
+                    </>}
+                    {li===3&&<>
+                      <div style={{fontSize:8,color:C.muted,marginBottom:2}}>Watts</div>
+                      <input type="number" value={inp.kitchenW} step={100} min={0}
+                        onChange={e=>upd("kitchenW",parseFloat(e.target.value)||0)} style={sI}/>
+                      <div style={{fontSize:9,color:C.accent,marginTop:2}}>{kw.toFixed(2)} kW</div>
+                    </>}
+                    {li===4&&<>
+                      <div style={{fontSize:8,color:C.muted,marginBottom:2}}>Watts</div>
+                      <input type="number" value={inp.laundryW} step={100} min={0}
+                        onChange={e=>upd("laundryW",parseFloat(e.target.value)||0)} style={sI}/>
+                      <div style={{fontSize:9,color:C.accent,marginTop:2}}>{kw.toFixed(2)} kW</div>
+                    </>}
+                    {li===5&&<>
+                      <div style={{fontSize:8,color:C.muted,marginBottom:2}}>kW</div>
+                      <input type="number" value={inp.poolKW} step={0.5} min={0}
+                        onChange={e=>upd("poolKW",parseFloat(e.target.value)||0)} style={sI}/>
+                    </>}
+                    {li===6&&<>
+                      <div style={{fontSize:8,color:C.muted,marginBottom:2}}>kW</div>
+                      <input type="number" value={inp.miscKW} step={0.5} min={0}
+                        onChange={e=>upd("miscKW",parseFloat(e.target.value)||0)} style={sI}/>
+                    </>}
+                  </div>
+                  {/* Hours-per-window inputs */}
+                  {[0,1,2].map(wi=>{
+                    const hrs = +(fr[wi]*WIN_HRS[wi]).toFixed(1);
+                    return(
+                      <div key={wi} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+                        <input type="number" value={hrs} min={0} max={WIN_HRS[wi]} step={0.5}
+                          onChange={e=>{
+                            const h=Math.min(WIN_HRS[wi],Math.max(0,parseFloat(e.target.value)||0));
+                            const nf=[...fr]; nf[wi]=h/WIN_HRS[wi]; upd(pk,nf);
+                          }}
+                          style={{width:"70px",background:"#0f172a",border:`1px solid ${C.accent}55`,
+                            borderRadius:6,color:C.accent,fontSize:14,fontWeight:700,
+                            padding:"6px 8px",textAlign:"right",boxSizing:"border-box"}}/>
+                        <div style={{fontSize:8,color:C.muted}}>of {WIN_HRS[wi]}h</div>
+                      </div>
+                    );
+                  })}
+                  {/* Daily total */}
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontSize:13,fontWeight:700,color:C.yellow}}>{dailyKwh.toFixed(1)}</div>
+                    <div style={{fontSize:8,color:C.muted}}>kWh/day</div>
+                  </div>
+                </div>
+              );
+            })}
           </div> 
 
           {/* Load breakdown table */} 
@@ -3085,7 +3171,7 @@ for
         fontSize:11,color:C.yellow,borderLeft:`3px solid ${C.yellow}`}}> 
         🟡 Component specs set in <strong>📚 Equipment Library</strong>. 
         Design PSH is <strong>locked to December TMY ({DESIGN_PSH}h)</strong> — always sized for worst month. 
-        Load profile fractions set in <strong>🕐 Load Profile</strong> tab. 
+        Appliance ratings and load fractions set in <strong>⚡ Load</strong> tab.
       </div> 
       {[ 
         {title:"Site & Supply",color:C.blue,fields:[ 
@@ -3099,17 +3185,6 @@ for
           {l:"No. of villas",k:"nVillas",s:1}, 
           {l:"MDB busbar (A)",k:"mdbBusbarA",s:25}, 
           {l:`Monthly bill (${inp.currency||"EGP"})`,k:"monthlyBillEGP",s:500},
-        ]}, 
-        {title:"AC Loads",color:C.orange,fields:[ 
-          {l:"No. AC units",k:"acUnits",s:1},{l:"Avg tonnage (tons)",k:"acTonnage",s:0.5}, 
-          {l:"AC COP",k:"acCOP",s:0.5,note:"3.0=old split, 4.5=inverter-driven"},{l:"Summer hrs/day",k:"acHrsSummer",s:1},{l:"Winter hrs/day",k:"acHrsWinter",s:1}, 
-        ]}, 
-        {title:"Other Loads",color:C.yellow,fields:[ 
-          {l:"Lighting area (m²)",k:"lightingAreaM2",s:25},{l:"Water heater (kW)",k:"whKW",s:0.5}, 
-          {l:"WH hrs",k:"whHrs",s:0.5},{l:"Kitchen (W)",k:"kitchenW",s:100}, 
-          {l:"Kitchen hrs",k:"kitchenHrs",s:0.5},{l:"Laundry (W)",k:"laundryW",s:100}, 
-          {l:"Laundry hrs",k:"laundryHrs",s:0.5},{l:"Pool (kW)",k:"poolKW",s:0.5}, 
-          {l:"Pool hrs",k:"poolHrs",s:0.5},{l:"Misc (kW)",k:"miscKW",s:0.5},{l:"Misc hrs",k:"miscHrs",s:0.5}, 
         ]}, 
         {title:"Site Conditions",color:C.red,fields:[
           {l:"Max ambient °C",k:"tAmbMax",s:1,note:inp.elevationM!=null&&inp.elevationM!==74?`Site elev. ${Math.round(inp.elevationM)}m — lapse-rate applied in TMY fallback`:""},
