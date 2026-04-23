@@ -1,6 +1,29 @@
 import { C } from "../constants/index.js";
 import { cardS, passColor } from "../components/ui/primitives.jsx";
 
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function exportMonthlyCSV(r, inp) {
+  const header = ['Month','Load_kWh','Solar_Gen_kWh','Self_Consumed_kWh','Grid_Import_kWh','Export_kWh','PSH_h_day'];
+  const rows = MONTHS_SHORT.map((m, i) => {
+    const gen  = r.monthlyGen?.[i]     || 0;
+    const sc   = r.monthlySCArr?.[i]   || 0;
+    const grid = r.monthlyGridArr?.[i] || 0;
+    const load = r.monthlyLoadKwh?.[i] || 0;
+    const exp  = Math.max(0, gen - sc);
+    const psh  = r.tmyMonthly?.[i]?.psh || 0;
+    return [m, load.toFixed(0), gen.toFixed(0), sc.toFixed(0), grid.toFixed(0), exp.toFixed(0), psh.toFixed(2)];
+  });
+  const csv  = [header, ...rows].map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `solar_monthly_${(inp.projectRef||'report').replace(/\s+/g,'_')}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function DashboardTab({ r, inp, panel, inverter, battery, cs, yGen, fmtE }) {
   if (!r) return <div style={{color:C.muted,padding:20}}>Select components first.</div>;
 
@@ -47,8 +70,39 @@ export default function DashboardTab({ r, inp, panel, inverter, battery, cs, yGe
   ];
   const allPass = checks.every(c => c.v === "PASS");
 
+  // EgyptERA regulatory thresholds (EgyptERA Resolution 3/2023 + NCEDC circulars)
+  const regFlags = [];
+  if (r.actKwp > 500) regFlags.push({ lvl:"error", icon:"⛔",
+    msg:`System is ${r.actKwp.toFixed(1)} kWp — exceeds 500 kWp. NREA generation licence required before installation.` });
+  if (r.actKwp > 50 && r.actKwp <= 500) regFlags.push({ lvl:"warn", icon:"⚠",
+    msg:`System is ${r.actKwp.toFixed(1)} kWp — exceeds 50 kWp. NREA small-scale solar pre-approval required.` });
+  if (r.actKwp > 10 && r.actKwp <= 50) regFlags.push({ lvl:"info", icon:"ℹ",
+    msg:`System is ${r.actKwp.toFixed(1)} kWp — exceeds 10 kWp. NCEDC distributor pre-approval required before installation.` });
+  if (inp.netMeteringEnabled) regFlags.push({ lvl:"info", icon:"⚡",
+    msg:"Net metering enabled — requires signed net-metering contract with your electricity distribution company." });
+
+  const flagColors = { error: C.red, warn: C.orange, info: C.blue };
+
   return (
     <div>
+      {/* EgyptERA regulatory flags */}
+      {regFlags.map((f, i) => (
+        <div key={i} style={{padding:"8px 14px",borderRadius:8,marginBottom:8,fontSize:11,
+          background:`${flagColors[f.lvl]}18`, color:flagColors[f.lvl],
+          borderLeft:`3px solid ${flagColors[f.lvl]}`}}>
+          {f.icon} <strong>EgyptERA:</strong> {f.msg}
+        </div>
+      ))}
+
+      {/* CSV export */}
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}>
+        <button onClick={() => exportMonthlyCSV(r, inp)}
+          style={{padding:"6px 16px",background:C.card,border:`1px solid ${C.border}`,
+            borderRadius:8,color:C.accent,fontSize:11,fontWeight:700,cursor:"pointer"}}>
+          ⬇ Export Monthly CSV
+        </button>
+      </div>
+
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:14}}>
         {kpis.map(k => (
           <div key={k.l} style={{background:C.card,borderRadius:10,padding:"12px 14px",borderLeft:`4px solid ${k.c}`}}>

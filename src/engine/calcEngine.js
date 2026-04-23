@@ -14,7 +14,7 @@ export function bilinearDeg(yearsElapsed, annualRate) {
   return factor;
 }
 
-export function calcEngine(inp, panel, inverter, battery, hourlyData) {
+export function calcEngine(inp, panel, inverter, battery, hourlyData, opts) {
   if (!panel || !inverter) return null;
   const noBat = !battery || battery.kwh === 0;
 
@@ -254,7 +254,7 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
     dispatch = runHourlyDispatch(
       hourlyData.hourly, actKwp, etaSys,
       (hourlyData.precip
-        ? kimberSoiling(hourlyData.precip)          // dynamic Kimber model from PVGIS precip
+        ? kimberSoiling(hourlyData.precip, inp.soilingRate, 0.5, 0.005, 0.005, inp.cleaningIntervalDays)  // Kimber model
         : (inp.soilProfile || CAIRO_SOILING)),       // fallback: manual/Cairo schedule
       monthlyDemands, battery, inverter, 0,
 
@@ -273,6 +273,10 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
         lat:  inp.lat   || 30.06,          // D3: solar incidence angle
         tilt: inp.tiltDeg || 22,
         az:   inp.azimuth  || 0,
+        horizonProfile: inp.horizonProfile,
+        shadingMatrix:  opts && opts.shadingMatrix,
+        touPeakStart:   inp.touPeakStart || 17,
+        touPeakEnd:     inp.touPeakEnd   || 22,
       }
     );
   }
@@ -429,7 +433,8 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
         : (battery.costEGP / _EGP_BASE) * inp.usdRate);
   const bos          = actKwp * (inp.bosPerKwp ?? 8000);
   const engCost      = actKwp * (inp.engPerKwp ?? 5000);
-  const sysC         = arrayCostEGP+invCostEGP+batCostEGP+bos+engCost;
+  const connectionFeeEGP = inp.connectionFeeEnabled ? (inp.connectionFeeEGP||0) : 0;
+  const sysC         = arrayCostEGP+invCostEGP+batCostEGP+bos+engCost+connectionFeeEGP;
   const costPerKwp   = sysC/actKwp;
 
   // E4: Performance Ratio — standard KPI (IEC 61724-1)
@@ -444,19 +449,27 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
     ? (annGenTMY / (actKwp * annPSH)) : 0;
   // Target PR for Cairo grid-tied residential: 0.74–0.80
 
-  // E8: Albedo-based bifacial rear irradiance (IEC TS 60904-1-2 simplified model)
-  // G_rear = albedo × GHI × view_factor
-  // view_factor ≈ (1 + cos(tilt))/2  (sky view from rear of tilted panel)
-  // Bifacial gain replaces fixed % when albedo is specified
-  const albedo     = inp.albedo || 0.20;  // default 0.20 concrete
-  const tiltRad2   = (inp.tiltDeg * Math.PI) / 180;
-  const viewFactor = (1 + Math.cos(tiltRad2)) / 2;
-  // annGHI from PVGIS monthly: sum of gPoaAvg × (daylight hrs proxy)
-  // Simplified: use annPSH as GHI proxy (tilted PSH ≈ GHI for south-facing)
-  const gRearFrac  = panel.bifacial
-    ? albedo * viewFactor * (panel.bifacialFactor || 0.70) // bifacialFactor = rear cell efficiency / front
+  // E8: Bifacial rear irradiance — IEC TS 60904-1-2 two-component model
+  // Component 1 (ground-reflected): albedo × GHI × VF_rear→ground × (1 − row_shade_frac)
+  //   VF rear→ground = (1 + cos(tilt))/2
+  // Component 2 (sky diffuse rear):  Gd × VF_rear→sky
+  //   VF rear→sky = (1 − cos(tilt))/2  (small at low tilts, ~4% at 22°)
+  //   Gd ≈ 0.27 × GHI (Cairo DHI/GHI ratio, PVGIS monthly average)
+  // Row-height correction: fraction of inter-row ground in shadow reduces ground albedo component
+  const albedo    = inp.albedo || 0.20;
+  const tiltRad2  = (inp.tiltDeg * Math.PI) / 180;
+  const panelSlpM = 2.10;  // standard panel length along slope (72-cell, m)
+  // Inter-row pitch from winter-solstice 9 AM criterion (IEC 62817)
+  const latR2   = (inp.lat || 30.06) * Math.PI / 180;
+  const sinAlt9 = Math.max(0.08,
+    Math.sin(latR2) * Math.sin(-0.4094) + Math.cos(latR2) * Math.cos(-0.4094) * Math.cos(0.7854));
+  const pitchM  = Math.min(8.0, Math.max(panelSlpM + 0.3, panelSlpM * Math.sin(tiltRad2) / sinAlt9));
+  const groundShadedFrac = Math.min(0.85, (panelSlpM * Math.cos(tiltRad2)) / Math.max(1, pitchM));
+  const gRearGnd = albedo * ((1 + Math.cos(tiltRad2)) / 2) * (1 - groundShadedFrac * 0.55);
+  const gRearSky = 0.27 * ((1 - Math.cos(tiltRad2)) / 2);
+  const gRearFrac = panel.bifacial
+    ? (gRearGnd + gRearSky) * (panel.bifacialFactor || 0.70)
     : 0;
-  // bifacialMultiplier replaces fixed bifacialGain%
   const bifacialMultE8 = panel.bifacial ? (1 + gRearFrac) : 1.0;
 
   // E9: IAM correction — ASHRAE simplified model (b0 = 0.05 per IEC 61853-2)
@@ -602,10 +615,18 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
       } else {
         yearSav += scMo * tariff;
       }
-      // Net metering / FiT: export excess generation at netMeteringRate
+      // Net metering / FiT — split peak/off-peak when TOU enabled
       if (inp.netMeteringEnabled) {
-        const exportKwh = Math.max(0, genMo - scMo);
-        yearSav += exportKwh * (inp.netMeteringRate || 0.50) * escFac;
+        const totalExport = Math.max(0, genMo - scMo);
+        if (inp.touEnabled && dispatch && dispatch.monthlyPeakExportArr) {
+          const pkScale  = deg * yieldFactor;
+          const peakExp  = Math.min(totalExport, (dispatch.monthlyPeakExportArr[mi]||0) * pkScale);
+          const offPkExp = Math.max(0, totalExport - peakExp);
+          yearSav += (peakExp  * (inp.touPeakExportRate || inp.netMeteringRate || 0.68)
+                    + offPkExp * (inp.netMeteringRate || 0.50)) * escFac;
+        } else {
+          yearSav += totalExport * (inp.netMeteringRate || 0.50) * escFac;
+        }
       }
     });
     const om   = inp.omPerYear * Math.pow(1 + inp.omEsc/100, yr-1);
@@ -705,6 +726,8 @@ export function calcEngine(inp, panel, inverter, battery, hourlyData) {
     chkVdFdr:vdFdr<=1.5?"PASS":"FAIL",
     chkVdAC :vdAC<=2.0 ?"PASS":"FAIL",
     chkSize500:actKwp<500?"PASS":"FAIL",
+    chkSize50: actKwp<=50?"OK":"WARN",
+    chkSize10: actKwp<=10?"OK":"WARN",
     arrayCostEGP, invCostEGP, batCostEGP, bos, engCost, sysC, costPerKwp,
     pb, netGain, roi:roi.toFixed(1), irr:irr.toFixed(1), cfYears,
     npvAtRate:Math.round(npvAtRate), lcoe:lcoe.toFixed(2), sensitivity,

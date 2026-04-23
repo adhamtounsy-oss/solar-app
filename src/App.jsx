@@ -10,6 +10,7 @@ import { saveProject, loadProject, listProjects, deleteProject } from "./lib/sto
 import { cellTempFaiman, lowIrradianceFactor, solarCosIncidence, iamBeam, fitOneDiodeParams, translateOneDiode, solveMPP_norm, kimberSoiling } from "./lib/physics.js";
 import { parseSmartMeterCSV, parsePVGISJson, parsePANFile, parseONDFile, fetchPVGIS } from "./lib/parsers.js";
 import { runHourlyDispatch } from "./lib/dispatch.js";
+import { perezAnnualPoa } from "./lib/irradiance.js";
 import { computeLoadProfile, seasonalAcScale, computeEtaSys, slotsFromFractions, fractionsFromSlots, initAllSlots } from "./lib/profile.js";
 import LoadTab from "./tabs/LoadTab.jsx";
 import ProjectsTab from "./tabs/ProjectsTab.jsx";
@@ -28,6 +29,7 @@ import SldTab from "./tabs/SldTab.jsx";
 import BomTab from "./tabs/BomTab.jsx";
 import ProposalTab from "./tabs/ProposalTab.jsx";
 import SolarTab from "./tabs/SolarTab.jsx";
+import Shading3DTab from "./tabs/Shading3DTab.jsx";
 import { passColor, cardS, tbl, SH, Row, Calc, Bar, TblHead, WarnBanner } from "./components/ui/primitives.jsx";
 import LocationPickerModal from "./components/LocationPickerModal.jsx";
 import MiniMapPreview from "./components/MiniMapPreview.jsx";
@@ -102,27 +104,24 @@ import { calcEngine, runOpt, bilinearDeg } from "./engine/calcEngine.js";
 }
 
 /**
- * Tilt-azimuth parametric sweep — isotropic sky model (Klein 1977)
+ * Tilt-azimuth parametric sweep — Perez 1990 anisotropic transposition
  * Tilts: 0°…45° (11 steps); Azimuths: −60°…+60° (9 steps, S=0)
- * @param {Object} inp       DEF input parameters (lat, systemKwp, tiltDeg)
- * @param {Object} pvgisRef  PVGIS result (annGenKwh) — null uses 1850 kWh/kWp fallback
+ * Calibrates to PVGIS annual yield when available.
+ * @param {Object} inp       DEF input parameters (lat, tiltDeg, azimuth)
+ * @param {Object} pvgisRef  parsed PVGIS result (.monthly[].{psh,days}) — null uses uncalibrated Perez
  * @returns {{tilts, azimuths, grid, optTilt, optAz, optYield}}
  */function tiltAzSweep(inp, pvgisRef) {
   const tilts    = [0, 5, 10, 15, 20, 22, 25, 30, 35, 40, 45];
   const azimuths = [-60, -45, -30, -15, 0, 15, 30, 45, 60];
-  const lat_r    = (inp.lat || 30.06) * Math.PI / 180;
-  const baseYield = pvgisRef && pvgisRef.annGenKwh
-    ? pvgisRef.annGenKwh / Math.max(0.1, inp.systemKwp || 5)
-    : 1850;
+  const lat      = inp.lat || 30.06;
+  const pvgisYield = pvgisRef && pvgisRef.monthly
+    ? pvgisRef.monthly.reduce(function(s, mo) { return s + mo.psh * mo.days; }, 0)
+    : null;
+  const refPoa = perezAnnualPoa(lat, inp.tiltDeg || 22, inp.azimuth || 0, 1);
+  const calib  = pvgisYield && refPoa > 0 ? pvgisYield / refPoa : 1.0;
   const grid = tilts.map(function(tilt) {
-    const t_r = tilt * Math.PI / 180;
     return azimuths.map(function(az) {
-      const Rb  = Math.max(0, Math.cos(lat_r - t_r) / Math.max(0.01, Math.cos(lat_r)));
-      const Fd  = (1 + Math.cos(t_r)) / 2;   // diffuse view factor
-      const Fr  = 0.20 * (1 - Math.cos(t_r)) / 2; // ground-reflected
-      const azP = 1 - Math.min(0.20, 0.002 * Math.abs(az)); // ~0.2%/° off south
-      const rel = (Rb * 0.60 + Fd * 0.30 + Fr * 0.10) * azP;
-      return Math.round(baseYield * Math.max(0.70, rel));
+      return Math.round(perezAnnualPoa(lat, tilt, az, calib));
     });
   });
   let optTilt = tilts[0], optAz = 0, optYield = 0;
@@ -264,6 +263,7 @@ export default function App() {
   const [inputHash,setInputHash]     = useState('');       // SHA-256 QR verification
   const [yieldDist,setYieldDist]     = useState(null);     // Monte Carlo result
   const [sweepResult,setSweepResult] = useState(null);     // tilt/az sweep heatmap
+  const [shadingMatrix,setShadingMatrix] = useState(null); // 3D near-shading matrix [12][24]
   const [usdRateLive,setUsdRateLive] = useState(null);     // live EGP/USD rate
   const [optimNpv,setOptimNpv]       = useState(null);     // optimizer NPV result
   const [spdResult,setSpdResult]     = useState(null);     // SPD sizing result
@@ -478,8 +478,8 @@ export default function App() {
   const panel    = useMemo(() => panelLib.find(p => p.id===selPanel) || panelLib[0], [panelLib, selPanel]);
   const inverter = useMemo(() => invLib.find(x => x.id===selInv)    || invLib[0],    [invLib, selInv]);
   const battery  = useMemo(() => batLib.find(b => b.id===selBat)    || batLib[0],    [batLib, selBat]);
-  const r        = useMemo(() => calcEngine(inp, panel, inverter, battery, pvgisData),
-                            [inp, panel, inverter, battery, pvgisData]);
+  const r        = useMemo(() => calcEngine(inp, panel, inverter, battery, pvgisData, {shadingMatrix}),
+                            [inp, panel, inverter, battery, pvgisData, shadingMatrix]);
 
   // -- Clear load-slot drag on global mouseup ---------------------------------
   useEffect(()=>{
@@ -743,12 +743,18 @@ export default function App() {
   );
 
 
+  // -- 🏗 SHADING 3D TAB ----------------------------------------
+  const renderShading3D = () => (
+    <Shading3DTab r={r} inp={inp} upd={upd}
+      onShadingMatrixChange={setShadingMatrix} />
+  );
+
   // -- EQUIPMENT LIBRARY TAB -------------------------------- 
   const renderLibrary = () => (
     <LibraryTab
       r={r} inp={inp}
       panel={panel} inverter={inverter} battery={battery}
-      selPanel={selPanel} setSelPanel={setSelPanel} panelLib={panelLib}
+      selPanel={selPanel} setSelPanel={setSelPanel} panelLib={panelLib} setPLib={setPLib}
       selInv={selInv}     setSelInv={setSelInv}     invLib={invLib}
       selBat={selBat}     setSelBat={setSelBat}     batLib={batLib}
       fmtE={fmtE}
@@ -866,6 +872,7 @@ export default function App() {
     projects:renderProjects, 
     library:renderLibrary, recommend:renderRecommend, coverage:renderCoverage, 
     dashboard:renderDashboard, solar:renderSolar,
+    shading3d:renderShading3D,
     load:renderLoad, p3:renderP3, p4:renderP4, p5:renderP5, p6:renderP6,
     sld:renderSLD, bom:renderBOM, 
     optimizer:renderOptimiser, financial:renderFinancial, 

@@ -147,6 +147,49 @@ export default function FinancialTab({ r, inp, upd, cs, fmtE, fmtU }) {
         )}
       </div>
 
+      {/* TOU peak export rate — visible only when both TOU and net metering are on */}
+      {inp.touEnabled && inp.netMeteringEnabled && (
+        <div style={{padding:"10px 14px",background:`${C.yellow}10`,borderRadius:8,
+          marginBottom:10,border:`1px solid ${C.yellow}44`}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.yellow,marginBottom:6}}>⏰ TOU Peak Export Rate</div>
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            <span style={{fontSize:10,color:C.muted}}>Peak hours ({inp.touPeakStart||17}:00–{inp.touPeakEnd||22}:00) rate ({inp.currency||"EGP"}/kWh):</span>
+            <input type="number" min="0" max="10" step="0.05"
+              value={inp.touPeakExportRate||0.68}
+              onChange={e => upd("touPeakExportRate", parseFloat(e.target.value)||0.68)}
+              style={{width:70,background:C.card,border:`1px solid ${C.yellow}`,
+                borderRadius:6,color:C.yellow,fontSize:12,padding:"4px 6px",textAlign:"right"}}/>
+            <span style={{fontSize:9,color:C.muted}}>Off-peak exports credited at base net metering rate ({inp.netMeteringRate||0.50} {inp.currency||"EGP"}/kWh)</span>
+          </div>
+        </div>
+      )}
+
+      {/* Connection fee */}
+      <div style={{padding:"10px 14px",background:`${C.muted}10`,borderRadius:8,
+        marginBottom:10,border:`1px solid ${C.border}`}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:inp.connectionFeeEnabled?6:0}}>
+          <span style={{fontSize:11,fontWeight:700,color:C.muted}}>🔌 Grid Connection Fee</span>
+          <button onClick={() => upd("connectionFeeEnabled", !inp.connectionFeeEnabled)}
+            style={{padding:"3px 12px",borderRadius:12,border:"none",cursor:"pointer",
+              fontSize:10,fontWeight:700,
+              background:inp.connectionFeeEnabled?C.accent:C.card,
+              color:inp.connectionFeeEnabled?C.bg:C.muted}}>
+            {inp.connectionFeeEnabled ? "ON" : "OFF"}
+          </button>
+        </div>
+        {inp.connectionFeeEnabled && (
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            <span style={{fontSize:10,color:C.muted}}>One-time connection fee ({inp.currency||"EGP"}):</span>
+            <input type="number" min="0" step="500"
+              value={inp.connectionFeeEGP||0}
+              onChange={e => upd("connectionFeeEGP", parseFloat(e.target.value)||0)}
+              style={{width:100,background:C.card,border:`1px solid ${C.accent}`,
+                borderRadius:6,color:C.accent,fontSize:12,padding:"4px 6px",textAlign:"right"}}/>
+            <span style={{fontSize:9,color:C.muted}}>Added to system cost for payback/IRR/NPV</span>
+          </div>
+        )}
+      </div>
+
       <div style={{padding:"8px 14px",background:`${C.green}18`,borderRadius:8,marginBottom:12,
         borderLeft:`3px solid ${C.green}`,fontSize:11,color:C.green}}>
         {r.tmySource==="pvgis"

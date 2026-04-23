@@ -2,6 +2,7 @@ import { C, CAIRO_SOILING, SIGMA_TOT } from "../constants/index.js";
 import { cardS, tbl } from "../components/ui/primitives.jsx";
 import { computeEtaSys } from "../lib/profile.js";
 import MiniMapPreview from "../components/MiniMapPreview.jsx";
+import { perezAnnualPoa } from "../lib/irradiance.js";
 
 function Tip({ text, showTip, hideTip }) {
   return (
@@ -78,22 +79,15 @@ function lossWaterfall(r, yGen, soilProfile) {
   ];
 }
 
-function optimalTiltYields(tmyMonthly, lat) {
-  if (!tmyMonthly || tmyMonthly.length < 12) return [];
-  const latRad = lat * Math.PI/180;
-  return Array.from({length:10}, (_,i) => {
-    const tilt = i*5;
-    const tRad = tilt * Math.PI/180;
-    const decls = [-23.45,-20.9,-11.6,0,11.6,20.9,23.45,20.9,11.6,0,-11.6,-20.9]
-      .map(d => d*Math.PI/180);
-    let annYield = 0;
-    tmyMonthly.forEach((mo, mi) => {
-      const decl = decls[mi];
-      const cosInc = Math.sin(latRad-tRad)*Math.sin(decl)+Math.cos(latRad-tRad)*Math.cos(decl);
-      const tiltFactor = Math.max(0.7, Math.min(1.2, cosInc / (Math.sin(latRad)*Math.sin(decl)+Math.cos(latRad)*Math.cos(decl)+0.001)));
-      annYield += mo.psh * mo.days * Math.max(0.8, tiltFactor);
-    });
-    return { tilt, yield: Math.round(annYield) };
+// Perez 1990 anisotropic tilt sweep — south-facing (az=0), 0°…45° in 5° steps
+// pvgisRef: parsed PVGIS result with .monthly[].{psh,days} for calibration
+function optimalTiltYields(lat, pvgisRef) {
+  const pvgisYield = pvgisRef?.monthly?.reduce((s, mo) => s + mo.psh * mo.days, 0) || null;
+  const refPoa = perezAnnualPoa(lat, 22, 0, 1);
+  const calib = pvgisYield && refPoa > 0 ? pvgisYield / refPoa : 1.0;
+  return Array.from({ length: 10 }, (_, i) => {
+    const tilt = i * 5;
+    return { tilt, yield: Math.round(perezAnnualPoa(lat, tilt, 0, calib)) };
   });
 }
 
@@ -118,7 +112,7 @@ export default function SolarTab({
   // renderSolarAdditions helpers
   const wf       = lossWaterfall(r, yGen, inp.soilProfile);
   const maxVal   = wf[0]?.value || 1;
-  const tiltSweep= optimalTiltYields(r?.tmyMonthly, inp.lat||30.06);
+  const tiltSweep= optimalTiltYields(inp.lat||30.06, pvgisData);
   const optTilt  = tiltSweep.length ? tiltSweep.reduce((a,b)=>b.yield>a.yield?b:a,tiltSweep[0]) : null;
 
   // Loss waterfall SVG

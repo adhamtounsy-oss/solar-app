@@ -5,7 +5,7 @@ export const EGYPT_TARIFF_TIERS = [
   { limit:350,      rate:1.55,  label:"Tier 4 (201–350 kWh)" },
   { limit:650,      rate:1.95,  label:"Tier 5 (351–650 kWh)" },
   { limit:1000,     rate:2.10,  label:"Tier 6 (651–1000 kWh)"},
-  { limit:Infinity, rate:2.58,  label:"Tier 7 (>1000 kWh)"  },
+  { limit:Infinity, rate:2.23,  label:"Tier 7 (>1000 kWh)"  },  // EgyptERA Sep 2024
 ];
 
 /**

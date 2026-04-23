@@ -20,6 +20,7 @@ export function lowIrradianceFactor(G_wm2, panel) {
   return Math.max(0.70, tbl[0] * (G_wm2 / _LI_G[0]));
 }
 
+// Fixed: removed spurious az_deg/15 term from hour angle (surface azimuth ≠ longitude offset)
 export function solarCosIncidence(hr, lat_deg, tilt_deg, az_deg) {
   const dayOfYear  = Math.floor(hr / 24) + 1;
   const hourOfDay  = (hr % 24) + 0.5;
@@ -32,7 +33,7 @@ export function solarCosIncidence(hr, lat_deg, tilt_deg, az_deg) {
              - 0.002697*Math.cos(3*B) + 0.001480*Math.sin(3*B);
   const eot  = (229.18/60) * (0.000075 + 0.001868*Math.cos(B) - 0.032077*Math.sin(B)
               - 0.014615*Math.cos(2*B) - 0.04089*Math.sin(2*B));
-  const ha   = (hourOfDay + az_deg/15 + eot - 12) * 15 * Math.PI / 180;
+  const ha   = (hourOfDay + eot - 12) * 15 * Math.PI / 180;  // hour angle only — no az_deg term
   return Math.max(0,
     Math.sin(decl)*Math.sin(lat)*Math.cos(tilt)
     - Math.sin(decl)*Math.cos(lat)*Math.sin(tilt)*Math.cos(az)
@@ -40,6 +41,32 @@ export function solarCosIncidence(hr, lat_deg, tilt_deg, az_deg) {
     + Math.cos(decl)*Math.sin(lat)*Math.cos(ha)*Math.sin(tilt)*Math.cos(az)
     + Math.cos(decl)*Math.sin(ha)*Math.sin(tilt)*Math.sin(az)
   );
+}
+
+/**
+ * Solar altitude and azimuth for a given day and hour (solar time).
+ * Azimuth convention: south=0, west=+, east=- (matches app's surface azimuth convention).
+ * @param {number} dayOfYear  1–365
+ * @param {number} hourOfDay  0–23 (solar time; 12 = solar noon)
+ * @param {number} lat_deg
+ * @returns {{ altDeg: number, azDeg: number }}
+ */
+export function solarAltAz(dayOfYear, hourOfDay, lat_deg) {
+  const lat  = lat_deg * Math.PI / 180;
+  const B    = 2 * Math.PI * (dayOfYear - 1) / 365;
+  const decl = 0.006918 - 0.399912*Math.cos(B) + 0.070257*Math.sin(B)
+             - 0.006758*Math.cos(2*B) + 0.000907*Math.sin(2*B);
+  const ha   = (hourOfDay - 12) * 15 * Math.PI / 180;  // hour angle, noon=0
+  const sinAlt = Math.sin(lat)*Math.sin(decl) + Math.cos(lat)*Math.cos(decl)*Math.cos(ha);
+  const altRad = Math.asin(Math.max(-1, Math.min(1, sinAlt)));
+  const cosAlt = Math.cos(altRad);
+  const altDeg = altRad * 180 / Math.PI;
+  const cosAz  = cosAlt > 0.001
+    ? (Math.sin(decl) - Math.sin(lat)*sinAlt) / (Math.cos(lat)*cosAlt)
+    : 0;
+  // magnitude 0–180; sign: morning (ha<0) = east (negative), afternoon (ha>0) = west (positive)
+  const azDeg  = Math.acos(Math.max(-1, Math.min(1, cosAz))) * 180 / Math.PI * (ha < 0 ? -1 : 1);
+  return { altDeg, azDeg };
 }
 
 export function iamBeam(cosTheta, b0) {
@@ -69,12 +96,46 @@ export function fitOneDiodeParams(panel) {
   return { IL, I0, Rs, Rsh, a, Ns };
 }
 
+/**
+ * Build one-diode reference params from real CEC parameters (panel.cecA etc.)
+ * Falls back to fitOneDiodeParams if CEC params are absent.
+ */
+export function oneDiodeFromPanel(panel) {
+  if (!panel) return null;
+  if (panel.cecA != null && panel.cecIl != null && panel.cecIo != null
+      && panel.cecRs != null && panel.cecRsh != null) {
+    return {
+      IL: panel.cecIl, I0: panel.cecIo, Rs: panel.cecRs, Rsh: panel.cecRsh,
+      a:  panel.cecA, Ns: panel.ns || 72,
+      alphaIsc_AperK: panel.alphaIsc_AperK,    // absolute A/°C from CEC database
+      isCEC: true,
+    };
+  }
+  return fitOneDiodeParams(panel);
+}
+
+/**
+ * Translate one-diode reference params to operating conditions (G, Tc).
+ * Supports both CEC (absolute alphaIsc_AperK in A/°C) and legacy (%/°C) formats.
+ * Uses De Soto (2006) model for IL, I0 translation; Varshni bandgap.
+ */
 export function translateOneDiode(ref, G, Tc_C) {
   if (!ref || G <= 0) return null;
   const Tc   = Tc_C + 273.15;        // °C → K
   const Tref = 298.15;               // K (25°C)
-  const alphaIsc = (ref.alphaIsc || 0.05) / 100;
-  const IL  = ref.IL * (G / 1000) * (1 + alphaIsc * (Tc_C - 25));
+
+  // De Soto photocurrent: IL(G,Tc) = (G/Gref) * [IL_ref + alpha_sc * (Tc - Tref)]
+  let IL;
+  if (ref.alphaIsc_AperK != null) {
+    // CEC path: absolute A/°C coefficient
+    IL = (G / 1000) * (ref.IL + ref.alphaIsc_AperK * (Tc_C - 25));
+  } else {
+    // Legacy: %/°C relative coefficient
+    const alphaIsc = (ref.alphaIsc || 0.05) / 100;
+    IL = ref.IL * (G / 1000) * (1 + alphaIsc * (Tc_C - 25));
+  }
+  IL = Math.max(0, IL);
+
   const Eg_ref = 1.121;              // Si bandgap at 25°C [eV]
   const Eg     = Eg_ref * (1 - 0.0002677 * (Tc - Tref)); // Varshni T-dependence
   const Eg0_nkB = Eg_ref * ref.Ns * Tref / ref.a;
@@ -117,11 +178,22 @@ export function solveMPP_norm(tr, Wp_stc) {
   return Math.max(0, Vmpp * solveI(Vmpp)) / (Wp_stc || 1);
 }
 
-export function kimberSoiling(precipDaily, sRate, threshold, afterRain, initSoil) {
+/**
+ * Kimber (2006) soiling accumulation model with optional manual cleaning schedule.
+ * @param {number[]} precipDaily   Daily precipitation (mm), length 365
+ * @param {number}   sRate         Soiling accumulation rate (fraction/day), default 0.0015
+ * @param {number}   threshold     Rain threshold for natural cleaning (mm), default 0.5
+ * @param {number}   afterRain     Soiling residual after rain cleaning, default 0.005
+ * @param {number}   initSoil      Initial soiling, default 0.005
+ * @param {number}   cleanIntervalDays  0 = rain-only; >0 = manual cleaning every N days
+ * @returns {number[]} 12-element monthly average soiling fraction
+ */
+export function kimberSoiling(precipDaily, sRate, threshold, afterRain, initSoil, cleanIntervalDays) {
   const sr   = sRate    || 0.0015;
   const thr  = threshold || 0.5;
   const ar   = afterRain || 0.005;
   const init = initSoil  || 0.005;
+  const cleanEvery = cleanIntervalDays || 0;
   const DAYS = [31,28,31,30,31,30,31,31,30,31,30,31];
   const monthSoil = new Array(12).fill(0);
   let soil = init;
@@ -130,12 +202,34 @@ export function kimberSoiling(precipDaily, sRate, threshold, afterRain, initSoil
     let monthSum = 0;
     for (let d = 0; d < DAYS[mi]; d++) {
       const rain = precipDaily[dayIdx] || 0;
-      if (rain >= thr) soil = ar;              // rain cleaning event
-      else             soil = Math.min(0.30, soil + sr); // accumulate (cap at 30%)
+      if (rain >= thr) {
+        soil = ar;                              // natural rain cleaning
+      } else if (cleanEvery > 0 && dayIdx % cleanEvery === 0) {
+        soil = ar;                              // manual cleaning event
+      } else {
+        soil = Math.min(0.30, soil + sr);       // accumulate (cap 30%)
+      }
       monthSum += soil;
       dayIdx++;
     }
     monthSoil[mi] = monthSum / DAYS[mi];
   }
   return monthSoil;
+}
+
+/**
+ * Bypass diode shading loss — IEC 62979 / PVsyst methodology.
+ * 3 bypass diodes per 72-cell module (24-cell sub-strings).
+ * @param {number} shadedModules   count of partially shaded modules in string
+ * @param {number} nInString       modules per string
+ * @param {number} modulePowerW    STC Wp per module
+ * @param {number} shadedFraction  fraction of module area shaded (0–1)
+ * @returns {number} fraction of string power lost (0–1)
+ */
+export function bypassDiodeClip(shadedModules, nInString, modulePowerW, shadedFraction) {
+  const DIODES       = 3;
+  const bypassedSubs = Math.min(DIODES, Math.ceil(shadedFraction * DIODES));
+  const modLossFrac  = bypassedSubs / DIODES;
+  if (!nInString || !modulePowerW) return 0;
+  return (shadedModules * modLossFrac * modulePowerW) / (nInString * modulePowerW);
 }

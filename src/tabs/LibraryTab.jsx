@@ -1,16 +1,40 @@
+import { useState } from "react";
 import { C } from "../constants/index.js";
 import { passColor, cardS, tbl } from "../components/ui/primitives.jsx";
+import { CEC_TOP200 } from "../data/cec_top200.js";
 
 export default function LibraryTab({
   r, inp,
   panel, inverter, battery,
-  selPanel, setSelPanel, panelLib,
+  selPanel, setSelPanel, panelLib, setPLib,
   selInv,   setSelInv,   invLib,
   selBat,   setSelBat,   batLib,
   fmtE,
   handleFile, uploadMsg,
   showCmp, setShowCmp,
 }) {
+  const [cecSearch, setCecSearch] = useState("");
+  const [showCec, setShowCec]     = useState(false);
+
+  const cecFiltered = CEC_TOP200.filter(p => {
+    if (!cecSearch.trim()) return true;
+    const q = cecSearch.toLowerCase();
+    return p.name.toLowerCase().includes(q) || p.brand.toLowerCase().includes(q) || String(p.wp).includes(q);
+  }).slice(0, 50);
+
+  function addCecPanel(p) {
+    const full = {
+      ...p,
+      betaVoc: p.betaVoc_VperK != null ? +(p.betaVoc_VperK / p.voc * 100).toFixed(3) : -0.28,
+      nInStr: 20,
+      u0: 25.0, u1: 6.84, b0: 0.05,
+      certifications: p.warranty25 ? "IEC 61215 · IEC 61730 · 25yr warranty" : "IEC 61215",
+    };
+    const exists = panelLib.some(x => x.id === full.id);
+    if (!exists) setPLib(prev => [...prev, full]);
+    setSelPanel(full.id);
+  }
+
   return (
     <div>
       <div style={cardS(C.accent)}>
@@ -36,6 +60,80 @@ export default function LibraryTab({
               color:uploadMsg.includes("✅")?"#166534":"#991b1b"}}>{uploadMsg}</div>
           )}
         </div>
+      </div>
+
+      {/* CEC Module Database search */}
+      <div style={cardS(C.blue)}>
+        <div style={{padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}
+          onClick={() => setShowCec(!showCec)}>
+          <span style={{color:"white",fontWeight:800,fontSize:13}}>🔬 NREL CEC Module Database — 200 Panels</span>
+          <span style={{fontSize:11,color:"#93c5fd"}}>{showCec ? "▲ Collapse" : "▼ Search & Import"}</span>
+        </div>
+        {showCec && (
+          <div style={{padding:"12px 16px"}}>
+            <div style={{fontSize:10,color:C.muted,marginBottom:10,lineHeight:1.6}}>
+              CEC certified one-diode parameters (NREL SAM database). Search by brand, model, or wattage.
+              Click <strong style={{color:C.blue}}>Add &amp; Select</strong> to add to your library and activate.
+            </div>
+            <input
+              type="text" placeholder="Search: JA Solar, LONGi, Trina, 545..."
+              value={cecSearch} onChange={e => setCecSearch(e.target.value)}
+              style={{width:"100%",boxSizing:"border-box",background:"#0f172a",
+                border:`1.5px solid ${C.blue}`,borderRadius:8,color:C.text,fontSize:12,
+                padding:"8px 12px",marginBottom:10,outline:"none"}}
+            />
+            <div style={{overflowX:"auto",maxHeight:320,overflowY:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                <thead style={{position:"sticky",top:0,background:"#0f172a",zIndex:1}}>
+                  <tr style={{borderBottom:`2px solid ${C.border}`}}>
+                    {["Brand","Model","Wp","Voc","Vmp","Isc","γ%/°C","NOCT","Tech",""].map(h => (
+                      <th key={h} style={{padding:"5px 8px",textAlign:"right",color:C.muted,fontWeight:600,whiteSpace:"nowrap",
+                        ...(h===""?{textAlign:"center"}:{})}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {cecFiltered.map((p, i) => {
+                    const already = panelLib.some(x => x.id === p.id);
+                    const isActive = selPanel === p.id;
+                    return (
+                      <tr key={p.id} style={{background: isActive ? `${C.blue}22` : i%2===0?"transparent":"#070f1f",
+                        borderLeft: isActive ? `3px solid ${C.blue}` : "3px solid transparent"}}>
+                        <td style={{padding:"5px 8px",color:C.muted,whiteSpace:"nowrap"}}>{p.brand}</td>
+                        <td style={{padding:"5px 8px",color:C.text,whiteSpace:"nowrap"}}>{p.model}</td>
+                        <td style={{padding:"5px 8px",textAlign:"right",color:C.yellow,fontWeight:700}}>{p.wp}</td>
+                        <td style={{padding:"5px 8px",textAlign:"right",color:C.muted}}>{p.voc}V</td>
+                        <td style={{padding:"5px 8px",textAlign:"right",color:C.muted}}>{p.vmp}V</td>
+                        <td style={{padding:"5px 8px",textAlign:"right",color:C.muted}}>{p.isc}A</td>
+                        <td style={{padding:"5px 8px",textAlign:"right",color:C.orange}}>{p.gammaPmax}</td>
+                        <td style={{padding:"5px 8px",textAlign:"right",color:C.muted}}>{p.noct}°C</td>
+                        <td style={{padding:"5px 8px",color:C.muted,fontSize:9}}>{p.bifacial?"Bifacial":"Mono"}</td>
+                        <td style={{padding:"5px 8px",textAlign:"center"}}>
+                          <button onClick={() => addCecPanel(p)}
+                            style={{padding:"3px 10px",borderRadius:12,border:"none",cursor:"pointer",
+                              fontSize:10,fontWeight:700,whiteSpace:"nowrap",
+                              background: isActive ? C.green : already ? C.card : C.blue,
+                              color: isActive ? C.bg : already ? C.muted : C.bg}}>
+                            {isActive ? "✓ Active" : already ? "✓ In lib" : "Add & Select"}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {cecFiltered.length === 0 && (
+                    <tr><td colSpan={10} style={{padding:16,textAlign:"center",color:C.muted,fontSize:11}}>
+                      No panels match "{cecSearch}"
+                    </td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div style={{fontSize:9,color:C.muted,marginTop:6}}>
+              Showing {cecFiltered.length} of {CEC_TOP200.length} panels · Sorted by wattage
+              {cecSearch && ` · Filter: "${cecSearch}"`}
+            </div>
+          </div>
+        )}
       </div>
 
       <div style={cardS(C.orange)}>
