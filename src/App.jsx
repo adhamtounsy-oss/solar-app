@@ -2045,44 +2045,58 @@ export default function App() {
                 upd(pk,fractionsFromSlots(next));
               };
               return(
-                <div key={pk} style={{padding:"10px 16px",borderBottom:`1px solid ${C.border}`}}>
-                  {/* Row 1: spec + kWh/day */}
-                  <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:10,flexWrap:"wrap"}}>
-                    <div style={{flex:"1 1 200px"}}>
-                      <div style={{fontSize:12,fontWeight:700,color:C.text,marginBottom:5}}>{icon} {label}</div>
+                <div key={pk} style={{padding:"8px 16px",borderBottom:`1px solid ${C.border}`}}>
+                  {/* Row 1: name left | specs + kWh/day right */}
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:8,flexWrap:"wrap"}}>
+                    <div style={{fontSize:12,fontWeight:700,color:C.text,flexShrink:0}}>{icon} {label}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",justifyContent:"flex-end"}}>
                       {li===0&&<>
-                        <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:3}}>
-                          {[{l:"Units",k:"acUnits",s:1,min:1},{l:"Tons",k:"acTonnage",s:0.5,min:0.5},{l:"COP",k:"acCOP",s:0.5,min:1}].map(({l,k,s,min})=>(
-                            <div key={k} style={{textAlign:"center"}}>
-                              <div style={{fontSize:8,color:C.muted,marginBottom:2}}>{l}</div>
-                              <input type="number" value={inp[k]} step={s} min={min} onChange={e=>upd(k,parseFloat(e.target.value)||min)} style={sI}/>
-                            </div>
-                          ))}
-                        </div>
-                        <div style={{display:"flex",gap:4,marginBottom:2}}>
-                          {[{l:"Summer h/day",k:"acHrsSummer",s:0.5},{l:"Winter h/day",k:"acHrsWinter",s:0.5}].map(({l,k,s})=>(
-                            <div key={k} style={{textAlign:"center"}}>
-                              <div style={{fontSize:8,color:C.muted,marginBottom:2}}>{l}</div>
-                              <input type="number" value={inp[k]} step={s} min={0} max={24} onChange={e=>upd(k,parseFloat(e.target.value)||0)} style={sI}/>
-                            </div>
-                          ))}
-                        </div>
-                        <div style={{fontSize:9,color:C.accent}}>{kw.toFixed(2)} kW total</div>
+                        {[{l:"Units",k:"acUnits",s:1,min:1},{l:"Tons",k:"acTonnage",s:0.5,min:0.5},{l:"COP",k:"acCOP",s:0.5,min:1},
+                          {l:"Summer h",k:"acHrsSummer",s:0.5,min:0,max:24},{l:"Winter h",k:"acHrsWinter",s:0.5,min:0,max:24}].map(({l,k,s,min,max})=>(
+                          <div key={k} style={{textAlign:"center"}}>
+                            <div style={{fontSize:8,color:C.muted,marginBottom:2}}>{l}</div>
+                            <input type="number" value={inp[k]} step={s} min={min} max={max} onChange={e=>upd(k,parseFloat(e.target.value)||min)} style={sI}/>
+                          </div>
+                        ))}
+                        <div style={{fontSize:9,color:C.accent}}>{kw.toFixed(2)} kW</div>
                       </>}
                       {li===1&&<>
-                        <div style={{fontSize:8,color:C.muted,marginBottom:2}}>Area m²</div>
-                        <input type="number" value={inp.lightingAreaM2} step={10} min={0} onChange={e=>upd("lightingAreaM2",parseFloat(e.target.value)||0)} style={sI}/>
-                        <div style={{fontSize:9,color:C.accent,marginTop:2}}>{kw.toFixed(2)} kW (8W/m²)</div>
+                        <div style={{textAlign:"center"}}>
+                          <div style={{fontSize:8,color:C.muted,marginBottom:2}}>Area m²</div>
+                          <input type="number" value={inp.lightingAreaM2} step={10} min={0} onChange={e=>upd("lightingAreaM2",parseFloat(e.target.value)||0)} style={sI}/>
+                        </div>
+                        <div style={{fontSize:9,color:C.accent}}>{kw.toFixed(2)} kW</div>
                       </>}
-                      {li===2&&<><div style={{fontSize:8,color:C.muted,marginBottom:2}}>kW</div><input type="number" value={inp.whKW} step={0.5} min={0} onChange={e=>upd("whKW",parseFloat(e.target.value)||0)} style={sI}/></>}
-                      {li===3&&<><div style={{fontSize:8,color:C.muted,marginBottom:2}}>Watts</div><input type="number" value={inp.kitchenW} step={100} min={0} onChange={e=>upd("kitchenW",parseFloat(e.target.value)||0)} style={sI}/><div style={{fontSize:9,color:C.accent,marginTop:2}}>{kw.toFixed(2)} kW</div></>}
-                      {li===4&&<><div style={{fontSize:8,color:C.muted,marginBottom:2}}>Watts</div><input type="number" value={inp.laundryW} step={100} min={0} onChange={e=>upd("laundryW",parseFloat(e.target.value)||0)} style={sI}/><div style={{fontSize:9,color:C.accent,marginTop:2}}>{kw.toFixed(2)} kW</div></>}
-                      {li===5&&<><div style={{fontSize:8,color:C.muted,marginBottom:2}}>kW</div><input type="number" value={inp.poolKW} step={0.5} min={0} onChange={e=>upd("poolKW",parseFloat(e.target.value)||0)} style={sI}/></>}
-                      {li===6&&<><div style={{fontSize:8,color:C.muted,marginBottom:2}}>kW</div><input type="number" value={inp.miscKW} step={0.5} min={0} onChange={e=>upd("miscKW",parseFloat(e.target.value)||0)} style={sI}/></>}
-                    </div>
-                    <div style={{textAlign:"right",flexShrink:0,paddingTop:4}}>
-                      <div style={{fontSize:18,fontWeight:800,color:C.yellow}}>{dailyKwh.toFixed(1)}</div>
-                      <div style={{fontSize:9,color:C.muted}}>kWh/day</div>
+                      {li===2&&<div style={{textAlign:"center"}}>
+                        <div style={{fontSize:8,color:C.muted,marginBottom:2}}>kW</div>
+                        <input type="number" value={inp.whKW} step={0.5} min={0} onChange={e=>upd("whKW",parseFloat(e.target.value)||0)} style={sI}/>
+                      </div>}
+                      {li===3&&<>
+                        <div style={{textAlign:"center"}}>
+                          <div style={{fontSize:8,color:C.muted,marginBottom:2}}>Watts</div>
+                          <input type="number" value={inp.kitchenW} step={100} min={0} onChange={e=>upd("kitchenW",parseFloat(e.target.value)||0)} style={sI}/>
+                        </div>
+                        <div style={{fontSize:9,color:C.accent}}>{kw.toFixed(2)} kW</div>
+                      </>}
+                      {li===4&&<>
+                        <div style={{textAlign:"center"}}>
+                          <div style={{fontSize:8,color:C.muted,marginBottom:2}}>Watts</div>
+                          <input type="number" value={inp.laundryW} step={100} min={0} onChange={e=>upd("laundryW",parseFloat(e.target.value)||0)} style={sI}/>
+                        </div>
+                        <div style={{fontSize:9,color:C.accent}}>{kw.toFixed(2)} kW</div>
+                      </>}
+                      {li===5&&<div style={{textAlign:"center"}}>
+                        <div style={{fontSize:8,color:C.muted,marginBottom:2}}>kW</div>
+                        <input type="number" value={inp.poolKW} step={0.5} min={0} onChange={e=>upd("poolKW",parseFloat(e.target.value)||0)} style={sI}/>
+                      </div>}
+                      {li===6&&<div style={{textAlign:"center"}}>
+                        <div style={{fontSize:8,color:C.muted,marginBottom:2}}>kW</div>
+                        <input type="number" value={inp.miscKW} step={0.5} min={0} onChange={e=>upd("miscKW",parseFloat(e.target.value)||0)} style={sI}/>
+                      </div>}
+                      <div style={{textAlign:"right",borderLeft:`1px solid ${C.border}`,paddingLeft:8,flexShrink:0}}>
+                        <div style={{fontSize:18,fontWeight:800,color:C.yellow}}>{dailyKwh.toFixed(1)}</div>
+                        <div style={{fontSize:9,color:C.muted}}>kWh/day</div>
+                      </div>
                     </div>
                   </div>
                   {/* Row 2: 48-slot grid */}
