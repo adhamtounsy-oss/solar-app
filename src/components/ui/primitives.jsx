@@ -52,6 +52,22 @@ export function Bar({val,max,color,width=70}) {
     </div>
   );
 }
+export function WarnBanner({warnings, scope}) {
+  const relevant = (warnings||[]).filter(w => w.scope === scope);
+  if (!relevant.length) return null;
+  return (
+    <div style={{marginBottom:10}}>
+      {relevant.map(w => (
+        <div key={w.id} style={{padding:"8px 14px",borderRadius:8,marginBottom:6,
+          background:w.sev==="red"?`${C.red}18`:`${C.orange}18`,
+          borderLeft:`3px solid ${w.sev==="red"?C.red:C.orange}`,
+          fontSize:11,color:w.sev==="red"?C.red:C.orange,lineHeight:1.5}}>
+          {w.sev==="red"?"⛔":"⚠"} {w.msg}
+        </div>
+      ))}
+    </div>
+  );
+}
 export function TblHead({label,calcCol}) {
   return (
     <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>

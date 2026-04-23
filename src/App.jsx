@@ -17,7 +17,11 @@ import InputsTab from "./tabs/InputsTab.jsx";
 import DashboardTab from "./tabs/DashboardTab.jsx";
 import LibraryTab from "./tabs/LibraryTab.jsx";
 import RecommendTab from "./tabs/RecommendTab.jsx";
-import { passColor, cardS, tbl, SH, Row, Calc, Bar, TblHead } from "./components/ui/primitives.jsx";
+import P3Tab from "./tabs/P3Tab.jsx";
+import P4Tab from "./tabs/P4Tab.jsx";
+import P5Tab from "./tabs/P5Tab.jsx";
+import P6Tab from "./tabs/P6Tab.jsx";
+import { passColor, cardS, tbl, SH, Row, Calc, Bar, TblHead, WarnBanner } from "./components/ui/primitives.jsx";
 import LocationPickerModal from "./components/LocationPickerModal.jsx";
 import MiniMapPreview from "./components/MiniMapPreview.jsx";
 import { calcEngine, runOpt, bilinearDeg } from "./engine/calcEngine.js";
@@ -1856,227 +1860,22 @@ export default function App() {
     return [renderSoilingEditor(), mcEl, nasaEl, sweepEl, waterfallEl, sweepEl ? null : tiltEl, obstacleEl, horizonEl];
   } 
 
-  const renderP3=()=>{ 
-    if(!r||!panel||!inverter)return null; 
-    return( 
-      <div> 
-        <WarnBanner scope="array"/>
-        <WarnBanner scope="sizing"/>
-        <div style={cardS(C.yellow)}> 
-          <div style={{padding:"10px 14px",color:"white",fontWeight:800}}> 
-            🔆 Phase 3 — Array Design ({panel.brand} {panel.model}) 
-          </div> 
-          <table style={tbl}><thead><tr style={{borderBottom:`2px solid ${C.border}`}}> 
-            <th style={{padding:"8px 14px",textAlign:"left",color:C.muted,fontSize:11,width:"45%"}}>Parameter</th> 
-            <th style={{padding:"8px 12px",textAlign:"right",color:C.muted,fontSize:11}}>Formula</th> 
-            <th style={{padding:"8px 12px",textAlign:"right",color:C.yellow,fontSize:11}}>Value</th> 
-          </tr></thead><tbody> 
-            <SH label="Temp-Corrected Voltages" color={C.orange}/> 
-            <Row label="Voc corrected — winter" shade={false}><td style={{padding:"6px 12px",textAlign:"right",color:C.muted,fontSize:10}}>Voc×[1+β×(Tmin−25)]</td><Calc v={r.vocWin} unit="V"/></Row> 
-            <Row label="Vmp corrected — summer" shade={true}><td style={{padding:"6px 12px",textAlign:"right",color:C.muted,fontSize:10}}>Vmp×[1+β×(Tmax−25)]</td><Calc v={r.vmpSum} unit="V"/></Row> 
-            <Row label="Pmax corrected — summer" shade={false}><td style={{padding:"6px 12px",textAlign:"right",color:C.muted,fontSize:10}}>Pmax×[1+γ×(Tmax−25)]</td><Calc v={r.pmaxSum} unit="Wp"/></Row> 
-            <SH label="String Configuration" color={C.yellow}/> 
-            <Row label="N_max / N_min" shade={true}><td/><Calc v={`${r.nMax} / ${r.nMin}`}/></Row> 
-            <Row label="▶ Selected modules / string" shade={false}><td/><Calc v={r.nSel} dp={0} big/></Row> 
-            <Row label="▶ Number of strings" shade={true}><td/><Calc v={r.nStr} dp={0} big/></Row> 
-            <Row label="▶ Total panels" shade={false}><td/><Calc v={r.totP} dp={0} big/></Row> 
-            <Row label="▶ Actual array (kWp)" shade={true}><td/><Calc v={r.actKwp} unit="kWp" dp={2} big/></Row> 
-            <Row label="DC/AC ratio" shade={false}><td/><Calc v={r.dcAc} dp={2}/></Row> 
-            <Row label={`Annual yield — ${inp.yieldMode==="p90"?"P90 (×0.92)":"TMY P50"}`} shade={true} note="12 months × temp-corrected η">
-              <td style={{padding:"6px 12px",textAlign:"right",color:C.green,fontSize:10}}>{inp.yieldMode==="p90"?"P90":"P50"}</td>
-              <Calc v={yGen} unit="kWh/yr" dp={0} big/>
-            </Row> 
-            <Row label="Annual yield — flat PSH" shade={false} note="Legacy single-PSH estimate"> 
-              <td/><Calc v={r.annGenFlat} unit="kWh/yr" dp={0}/> 
-            </Row> 
-            <Row label="Roof feasibility" shade={true}><td/><Calc v={r.roofFit?"PASS — fits roof":"REVIEW — check roof"}/></Row> 
-            {r.roofCapped && ( 
-              <Row label="⚠ Array roof-capped" shade={false} note={`Needed ${r.cappedKwp.toFixed(1)} kWp, limited to ${r.actKwp.toFixed(1)} kWp by roof`}> 
-                <td/> 
-                <Calc v={`${r.coverageActual.toFixed(0)}% actual vs ${r.effPct.toFixed(0)}% target`}/> 
-              </Row> 
-            )} 
-          </tbody></table> 
-        </div> 
-
-        {/* IMPROVEMENT 2: Row spacing section */} 
-        <div style={cardS(r.rowShadeOk?C.green:C.orange)}> 
-          <div style={{padding:"10px 14px",color:"white",fontWeight:800,display:"flex",justifyContent:"space-between",alignItems:"center"}}> 
-            <span>📐 Inter-Row Shading Analysis — Dec 21, 9am (Solar alt. {r.solarAltDeg != null ? r.solarAltDeg.toFixed(1) : "18.0"}°, lat {(inp.lat||30).toFixed(1)}°)</span>
-            <span style={{fontSize:10,padding:"3px 10px",borderRadius:12,fontWeight:700, background:`${inp.mountMode==="ground"?C.yellow:inp.mountMode==="hybrid"?C.green:C.accent}22`, color:inp.mountMode==="ground"?C.yellow:inp.mountMode==="hybrid"?C.green:C.accent}}> 
-
-
-              {inp.mountMode==="ground"?"🌱 Ground Mount":inp.mountMode==="hybrid"?"🏠+🌱 Hybrid":"🏠 Rooftop"} 
-            </span> 
-          </div> 
-          <table style={tbl}><TblHead label="Result" calcCol={r.rowShadeOk?C.green:C.orange}/><tbody> 
-            <SH label="Panel Geometry" color={C.yellow}/> 
-            <Row label="Tilt angle" shade={false}><td/><Calc v={inp.tiltDeg} unit="°" dp={0}/></Row> 
-            <Row label="Panel vertical projection" shade={true} note="L × sin(tilt)"> 
-              <td style={{padding:"6px 12px",textAlign:"right",color:C.muted,fontSize:10}}>L·sin(tilt)</td> 
-              <Calc v={r.panelVertM} unit="m" dp={2}/> 
-            </Row> 
+  const renderP3 = () => (
+    <P3Tab r={r} panel={panel} inverter={inverter} inp={inp} yGen={yGen} warnings={warnings} />
+  );
 
  
-              
-              
-            <Row label="Panel base (horizontal)" shade={false} note="L × cos(tilt)"> 
-              <td style={{padding:"6px 12px",textAlign:"right",color:C.muted,fontSize:10}}>L·cos(tilt)</td> 
-              <Calc v={r.panelBaseM} unit="m" dp={2}/> 
-            </Row> 
-            <SH label="Minimum Row Pitch" color={C.orange}/> 
-            <Row label="Solar altitude (design)" shade={false} note="Dec 21, 9am — conservative"> 
-              <td/><Calc v="18°"/> 
-            </Row> 
-            <Row label="▶ Min pitch (no shading)" shade={true} note="base + vert/tan(18°)"> 
-              <td style={{padding:"6px 12px",textAlign:"right",color:C.muted,fontSize:10}}>base+vert/tan(18°)</td> 
-              <Calc v={r.minPitch} unit="m" dp={2} big/> 
-            </Row> 
-            <SH label="Roof Capacity Check" color={r.rowShadeOk?C.green:C.orange}/> 
-            <Row label="Roof depth (N–S)" shade={false} note="Set in Other Inputs"> 
-              <td/><Calc v={inp.roofDepthM||12} unit="m" dp={0}/> 
-            </Row> 
-            <Row label="▶ Max rows without shading" shade={true}><td/><Calc v={r.maxRows} dp={0} big/></Row> 
-            <Row label="▶ Panels per row" shade={false}><td/><Calc v={r.panelsPerRow} dp={0}/></Row> 
-            <Row label="▶ Max panels (shade-free)" shade={true}><td/><Calc v={r.maxPanelsNoShade} dp={0} big/></Row> 
-            <Row label="▶ Designed panel count" shade={false}><td/><Calc v={r.totP} dp={0}/></Row> 
-            <Row label="Row spacing status" shade={true}><td/><Calc v={r.rowShadeOk?"PASS":"REVIEW — reduce or respac"} big/></Row> 
-            <Row label="Est. inter-row shading loss" shade={false}><td/><Calc v={r.rowShadeOk?0:r.interRowLossPct} unit="%" dp={1}/></Row> 
-          </tbody></table> 
-          {!r.rowShadeOk&&( 
-            <div style={{padding:"10px 16px",background:`${C.orange}15`,borderLeft:`4px solid ${C.orange}`, 
-              fontSize:11,color:C.orange,margin:"0 0 8px"}}> 
-              ⚠ Array ({r.totP} panels) exceeds shade-free limit ({r.maxPanelsNoShade} panels) 
-for 
-              {inp.roofDepthM||12}m roof depth at {inp.tiltDeg}° tilt. Either reduce panel count to 
-{r.maxPanelsNoShade}, 
-              increase row pitch, or increase roof depth in Other Inputs. 
-            </div> 
-          )} 
-        </div> 
-      </div> 
-    ); 
-  }; 
+  const renderP4 = () => (
+    <P4Tab r={r} battery={battery} inverter={inverter} inp={inp} />
+  );
 
- 
-  const renderP4=()=>{ 
-    if(!r||!battery)return null; 
-    return( 
-      <div style={cardS(C.blue)}> 
-        <div style={{padding:"10px 14px",color:"white",fontWeight:800}}> 
-          🔋 Phase 4 — Battery ({battery.brand} {battery.model}) 
-        </div> 
-        <table style={tbl}><TblHead label="Value" calcCol={C.blue}/><tbody> 
-          <SH label="Profile-Based Sizing (Improvement 3)" color={C.accent}/> 
-          <Row label="Evening demand (17–23h)" shade={false} note="From Load Profile tab — actual battery target"> 
-            <td/><Calc v={r.eveningDeficit} unit="kWh" big/> 
-          </Row> 
-          <Row label="Coverage target" shade={true}> 
-            <td/><Calc v={r.eveningDeficit*(inp.batEveningCovPct/100)} unit="kWh" big/> 
-          </Row> 
-          <Row label="Design energy (max of target/backup)" shade={false}> 
-            <td/><Calc v={r.designE} unit="kWh" big/> 
-          </Row> 
-          <Row label="▶ Usable battery capacity" shade={true}> 
-            <td/><Calc v={r.usableBat} unit="kWh" big/> 
-          </Row> 
-          <Row label="▶ Evening demand covered?" shade={false}> 
-            <td/><Calc v={r.usableBat>=r.eveningDeficit*(inp.batEveningCovPct/100)?"PASS":"UNDERSIZED"} big/> 
-          </Row> 
-          <Row label="▶ Autonomy @ 50% solar load" shade={true}> 
-            <td/><Calc v={r.autonomy} unit="hrs" dp={1} big/> 
-          </Row> 
-          <SH label="Solar Self-Consumption" color={C.green}/> 
-          <Row label={r.tmySource==="pvgis"?"Simulated SC rate (hourly dispatch)":"Profile SC rate (approx)"} shade={false} 
-            note={r.tmySource==="pvgis"?"8,760-hour dispatch simulation":"Fetch PVGIS for hourly simulation"}> 
-            <td style={{padding:"6px 12px",textAlign:"right",fontSize:10,color:r.tmySource==="pvgis"?C.green:C.yellow}}> 
-              {r.tmySource==="pvgis"?"✓ PVGIS":"↻ fallback"} 
-            </td> 
-            <Calc v={`${r.annSCPct!=null?r.annSCPct.toFixed(1):r.profileSCPct.toFixed(1)}%`} big/> 
-          </Row> 
-          {r.dispatch&&<> 
-            <Row label="Annual battery cycles" shade={true} note="Simulated throughput ÷ usable capacity"> 
-              <td/><Calc v={r.batCyclesYear.toFixed(0)} unit="cycles/yr"/> 
-            </Row> 
+  const renderP5 = () => (
+    <P5Tab r={r} inverter={inverter} panel={panel} battery={battery} />
+  );
 
-            <Row label="Dec evening unmet demand" shade={false} note="Grid imports 17–22h in December"> 
-              <td/><Calc v={r.dispatch.eveningDeficits[11].toFixed(1)} unit="kWh/day" 
-                big/> 
-            </Row> 
-            <Row label="Battery adequacy" shade={true}> 
-              <td/><Calc v={Math.max(...r.dispatch.eveningDeficits)<2?"PASS":"REVIEW"} big/> 
-            </Row> 
-          </>} 
-          <SH label="Regulatory Compliance" color={C.red}/> 
-          <Row label="Battery ↔ inverter voltage" shade={false}> 
-            <td/><Calc v={r.chkBatVolt} big/> 
-          </Row> 
-          <Row label="Battery rule (Circ.3/2023)" shade={true}> 
-            <td/><Calc v={r.chkBatRule} big/> 
-          </Row> 
-        </tbody></table> 
-      </div> 
-    ); 
-  }; 
-
-  const renderP5=()=>{ 
-    if(!r)return null; 
-    return( 
-      <div style={cardS(C.purple)}> 
-        <div style={{padding:"10px 14px",color:"white",fontWeight:800}}> 
-          🔌 Phase 5 — Inverter Checks ({inverter?.brand} {inverter?.model}) 
-        </div> 
-        <table style={tbl}><thead><tr style={{borderBottom:`2px solid ${C.border}`}}> 
-          <th style={{padding:"8px 14px",textAlign:"left",color:C.muted,fontSize:11,width:"40%"}}>Check</th> 
-          <th style={{padding:"8px 12px",textAlign:"right",color:C.muted,fontSize:11}}>Requirement</th> 
-          <th style={{padding:"8px 12px",textAlign:"right",color:C.purple,fontSize:11}}>Result</th> 
-        </tr></thead><tbody> 
-          {[ 
-            {l:"Inverter ≥ peak demand",req:`≥${r.peakDemandKW.toFixed(1)}kW`,      v:r.chkInvSize}, 
-            {l:"DC/AC ratio",          req:r.dcAc.toFixed(2),                      v:r.chkDcAc   }, 
-            {l:"Vmp ≥ MPPT min",       req:`${r.vmpSum.toFixed(1)}V≥${inverter?.mpptMin}V`, v:r.chkMpptMin}, 
-            {l:"Voc ≤ Vdc max",        req:`${r.strVoc.toFixed(1)}V≤${inverter?.vdcMax}V`,  v:r.chkMpptMax}, 
-            {l:"Isc per MPPT",         req:`${(panel?.isc*r.strPerMppt).toFixed(1)}A≤${inverter?.iscPerMppt}A`,v:r.chkIscMppt}, 
-            {l:"Battery voltage range",req:`${battery?.voltage}V in ${inverter?.batVoltMin||"—"}–${inverter?.batVoltMax||"—"}V`,v:r.chkBatVolt}, 
-
- 
-            {l:"Battery charge power", req:`${inverter?.batChargeKW}kW`,           v:r.chkBatChg }, 
-          ].map(({l,req,v},i)=>( 
-            <Row key={l} label={l} shade={i%2===0}> 
-              <td style={{padding:"6px 12px",textAlign:"right",color:C.muted,fontSize:11}}>{req}</td> 
-              <Calc v={v} big/> 
-            </Row> 
-          ))} 
-        </tbody></table> 
-      </div> 
-    ); 
-  }; 
-
-  const renderP6=()=>{ 
-    if(!r)return null; 
-    return( 
-      <div style={cardS(C.red)}> 
-        <div style={{padding:"10px 14px",color:"white",fontWeight:800}}>🔗 Phase 6 — Wiring</div> 
-        <table style={tbl}><TblHead label="Value / Check" calcCol={C.red}/><tbody> 
-          <SH label="Zone 1 — DC String" color={C.yellow}/> 
-          <Row label="Design current (Isc×1.56)" shade={false}><td/><Calc v={r.iStr} unit="A"/></Row> 
-          <Row label="Derated at 42°C" shade={true}><td/><Calc v={r.iStrD} unit="A" big/></Row> 
-          <Row label="VD % (≤1.5%)" shade={false}><td/><Calc v={`${r.vdStr.toFixed(2)}% → ${r.chkVdStr}`}/></Row> 
-          <Row label="String fuse rating" shade={true}><td/><Calc v={r.strFuse} unit="A dc"/></Row> 
-          <SH label="Zone 2 — DC Feeder" color={C.orange}/> 
-          <Row label="Feeder current" shade={false}><td/><Calc v={r.iFdr} unit="A"/></Row> 
-          <Row label="Derated" shade={true}><td/><Calc v={r.iFdrD} unit="A" big/></Row> 
-          <Row label="VD % (≤1.5%)" shade={false}><td/><Calc v={`${r.vdFdr.toFixed(2)}% → ${r.chkVdFdr}`}/></Row> 
-          <SH label="Zone 3 & 4 — Battery & AC" color={C.blue}/> 
-          <Row label="Battery current" shade={false}><td/><Calc v={r.iBat} unit="A" big/></Row> 
-          <Row label="AC output current" shade={true}><td/><Calc v={r.iAC} unit="A" big/></Row> 
-          <Row label="AC VD % (≤2.0%)" shade={false}><td/><Calc v={`${r.vdAC.toFixed(2)}% → ${r.chkVdAC}`}/></Row> 
-          <Row label="AC MCB" shade={true}><td/><Calc v={r.acBreaker} unit="A Type C"/></Row> 
-          <Row label="MDB busbar" shade={false}><td/><Calc v={r.mdbCheck} big/></Row> 
-        </tbody></table> 
-      </div> 
-    ); 
-  }; 
+  const renderP6 = () => (
+    <P6Tab r={r} inp={inp} />
+  );
 
  
   // -- SPD Sizing Card (appended to SLD tab) ---------------------------------
@@ -3083,41 +2882,12 @@ for</div>
  
  
   // C4: Cable summary card for Ph6 Wiring tab 
-  function renderCableSummary() { 
-    if(!r) return null; 
-    return ( 
-      <div style={{background:C.card,borderRadius:10,padding:"14px 16px",marginBottom:12, 
-        border:`1px solid ${C.border}`}}> 
-        <div style={{fontSize:11,color:C.green,textTransform:"uppercase",letterSpacing:1, 
-          fontWeight:700,marginBottom:10}}>🔌 Recommended Cable Sizes (IEC 60364-5-52 · E7)</div> 
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:8,marginBottom:8}}> 
-          {[ 
-            {l:"DC String",  v:`${r.csaStr||4} mm²`,  sub:`${r.nStr||1} run × ${Math.round((inp.lenStringM||25)*2)}m`, c:C.yellow}, 
-            {l:"DC Feeder",  v:`${r.csaFdr||16} mm²`, sub:`${Math.round((inp.lenFeederM||15)*2)}m total`,                c:C.orange}, 
-            {l:"AC Output",  v:`${r.csaAC||10} mm²`,  sub:`${Math.round((inp.lenACM||20)*3)}m (3-ph)`,                  c:C.green}, 
-            {l:"Battery DC", v:"35 mm²",               sub:`${Math.round((inp.lenBatteryM||3)*2)}m`,                     c:C.blue}, 
-          ].map(k=>( 
-            <div key={k.l} style={{background:"#0f172a",borderRadius:8,padding:"10px 12px", 
-              borderLeft:`3px solid ${k.c}`}}> 
-              <div style={{fontSize:10,color:C.muted,marginBottom:2}}>{k.l}</div> 
-              <div style={{fontSize:20,fontWeight:800,color:k.c}}>{k.v}</div> 
-              <div style={{fontSize:10,color:C.muted,marginTop:2}}>{k.sub}</div> 
-            </div> 
-          ))} 
-        </div> 
-        <div style={{fontSize:10,color:C.muted,fontFamily:"monospace"}}> 
-          ρ_DC=0.0206 Ω·mm²/m @70°C · ρ_AC=0.0199 @60°C · VD limits: DC ≤1.5% · AC ≤2.0% 
-          {r.csaStr ? ` · From Isc=${r.iStr?.toFixed(1)}A string current` : ""} 
-        </div> 
-      </div> 
-    ); 
-  } 
 
   const renderers = { 
     projects:renderProjects, 
     library:renderLibrary, recommend:renderRecommend, coverage:renderCoverage, 
     dashboard:renderDashboard, solar:()=><>{renderSolar()}{renderSolarAdditions()}</>, 
-    load:renderLoad, p3:renderP3, p4:renderP4, p5:renderP5, p6:()=><>{renderCableSummary()}{renderP6()}</>, 
+    load:renderLoad, p3:renderP3, p4:renderP4, p5:renderP5, p6:renderP6,
     sld:renderSLD, bom:renderBOM, 
     optimizer:renderOptimiser, financial:()=><>{renderFinancial()}{renderSensitivity()}</>, 
 
