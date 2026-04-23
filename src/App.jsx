@@ -2114,14 +2114,43 @@ export default function App() {
                       </div>
                       {/* Slot boxes */}
                       <div style={{display:"flex",gap:1,userSelect:"none"}}
+                        onMouseMove={e=>{
+                          if(!loadDragRef.current||loadDragRef.current.pk!==pk) return;
+                          const rect=e.currentTarget.getBoundingClientRect();
+                          const si=Math.min(47,Math.max(0,Math.floor((e.clientX-rect.left)/15)));
+                          const last=loadDragRef.current.lastSlot??si;
+                          const lo=Math.min(si,last), hi=Math.max(si,last);
+                          const nv=loadDragRef.current.mode==='select';
+                          const cur=loadDragRef.current.working?.[pk]||slots;
+                          const next=[...cur];
+                          let changed=false;
+                          for(let i=lo;i<=hi;i++){if(next[i]!==nv){next[i]=nv;changed=true;}}
+                          loadDragRef.current.lastSlot=si;
+                          if(!changed) return;
+                          const newAll={...(loadDragRef.current.working||loadSlots),[pk]:next};
+                          loadDragRef.current.working=newAll;
+                          setLoadSlots(newAll);
+                          upd(pk,fractionsFromSlots(next));
+                        }}
                         onTouchMove={e=>{
                           e.preventDefault();
                           if(!loadDragRef.current||loadDragRef.current.pk!==pk) return;
+                          const rect=e.currentTarget.getBoundingClientRect();
                           const t=e.touches[0];
-                          const el=document.elementFromPoint(t.clientX,t.clientY);
-                          if(!el||el.dataset.pk!==pk) return;
-                          const si=parseInt(el.dataset.slot);
-                          if(!isNaN(si)) applySlot(si, loadDragRef.current.mode==='select');
+                          const si=Math.min(47,Math.max(0,Math.floor((t.clientX-rect.left)/15)));
+                          const last=loadDragRef.current.lastSlot??si;
+                          const lo=Math.min(si,last), hi=Math.max(si,last);
+                          const nv=loadDragRef.current.mode==='select';
+                          const cur=loadDragRef.current.working?.[pk]||slots;
+                          const next=[...cur];
+                          let changed=false;
+                          for(let i=lo;i<=hi;i++){if(next[i]!==nv){next[i]=nv;changed=true;}}
+                          loadDragRef.current.lastSlot=si;
+                          if(!changed) return;
+                          const newAll={...(loadDragRef.current.working||loadSlots),[pk]:next};
+                          loadDragRef.current.working=newAll;
+                          setLoadSlots(newAll);
+                          upd(pk,fractionsFromSlots(next));
                         }}
                         onTouchEnd={()=>{ if(loadDragRef.current?.pk===pk) loadDragRef.current=null; }}
                       >
@@ -2138,17 +2167,13 @@ export default function App() {
                               onMouseDown={e=>{
                                 e.preventDefault();
                                 const nv=!active;
-                                loadDragRef.current={pk,mode:nv?'select':'deselect',working:{...loadSlots}};
+                                loadDragRef.current={pk,mode:nv?'select':'deselect',working:{...loadSlots},lastSlot:si};
                                 applySlot(si,nv);
-                              }}
-                              onMouseEnter={()=>{
-                                if(!loadDragRef.current||loadDragRef.current.pk!==pk) return;
-                                applySlot(si, loadDragRef.current.mode==='select');
                               }}
                               onTouchStart={e=>{
                                 e.preventDefault();
                                 const nv=!active;
-                                loadDragRef.current={pk,mode:nv?'select':'deselect',working:{...loadSlots}};
+                                loadDragRef.current={pk,mode:nv?'select':'deselect',working:{...loadSlots},lastSlot:si};
                                 applySlot(si,nv);
                               }}
                             />
