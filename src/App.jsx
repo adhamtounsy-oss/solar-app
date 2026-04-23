@@ -2093,7 +2093,7 @@ export default function App() {
                         {[{l:"",c:"#1e293b",n:12},{l:"Morning 06–10h",c:`${C.yellow}30`,n:8},
                           {l:"Day 10–17h",c:`${C.accent}30`,n:14},{l:"Evening 17–23h",c:`${C.purple}30`,n:12},{l:"",c:"#1e293b",n:2}]
                           .map(({l,c,n},i)=>(
-                          <div key={i} style={{flex:n,background:c,borderRadius:2,padding:"1px 3px",fontSize:8,
+                          <div key={i} style={{width:15*n-1,flexShrink:0,background:c,borderRadius:2,padding:"1px 3px",fontSize:8,
                             fontWeight:700,color:C.muted,textAlign:"center",height:14,lineHeight:"12px",
                             overflow:"hidden",whiteSpace:"nowrap"}}>{l}</div>
                         ))}
@@ -2144,7 +2144,7 @@ export default function App() {
                       {/* Time labels */}
                       <div style={{position:"relative",height:14,marginTop:3}}>
                         {[[0,"00:00"],[12,"06:00"],[20,"10:00"],[34,"17:00"],[46,"23:00"]].map(([slot,time])=>(
-                          <div key={slot} style={{position:"absolute",left:`${(slot/48)*100}%`,
+                          <div key={slot} style={{position:"absolute",left:`${slot*15}px`,
                             fontSize:8,color:C.muted,transform:"translateX(-50%)",whiteSpace:"nowrap"}}>
                             {time}
                           </div>
